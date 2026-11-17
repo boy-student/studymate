@@ -5,7 +5,15 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 
-import { getAuth, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
 import { getFirestore } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
@@ -31,6 +39,93 @@ const googleProvider = new GoogleAuthProvider();
 
 // データベース
 const db = getFirestore(app);
+
+// ===================================
+// ログイン・新規登録機能
+// ===================================
+
+const signupForm = document.getElementById("signupForm");
+const emailInput = document.getElementById("email");
+const passwordInput = document.getElementById("password");
+
+const loginButton = document.getElementById("loginButton");
+const googleLoginButton = document.getElementById("googleLoginButton");
+const logoutButton = document.getElementById("logoutButton");
+
+const authMessage = document.getElementById("authMessage");
+
+// 新規登録
+signupForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  try {
+    await createUserWithEmailAndPassword(
+      auth,
+      emailInput.value,
+      passwordInput.value
+    );
+
+    alert("新規登録が完了しました！");
+  } catch (error) {
+    alert("登録エラー：" + error.message);
+  }
+});
+
+// メールアドレスでログイン
+loginButton.addEventListener("click", async () => {
+  try {
+    await signInWithEmailAndPassword(
+      auth,
+      emailInput.value,
+      passwordInput.value
+    );
+
+    alert("ログインしました！");
+  } catch (error) {
+    alert("ログインエラー：" + error.message);
+  }
+});
+
+// Googleでログイン
+googleLoginButton.addEventListener("click", async () => {
+  try {
+    await signInWithPopup(auth, googleProvider);
+
+    alert("Googleログインしました！");
+  } catch (error) {
+    alert("Googleログインエラー：" + error.message);
+  }
+});
+
+// ログアウト
+logoutButton.addEventListener("click", async () => {
+  try {
+    await signOut(auth);
+
+    alert("ログアウトしました！");
+  } catch (error) {
+    alert("ログアウトエラー：" + error.message);
+  }
+});
+
+// ログイン状態を確認
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    authMessage.textContent =
+      user.email + " でログイン中です";
+
+    signupForm.hidden = true;
+    googleLoginButton.hidden = true;
+    logoutButton.hidden = false;
+  } else {
+    authMessage.textContent =
+      "ログインして勉強記録を保存しよう！";
+
+    signupForm.hidden = false;
+    googleLoginButton.hidden = false;
+    logoutButton.hidden = true;
+  }
+});
 
 // ===================================
 // HTMLの要素を取得
