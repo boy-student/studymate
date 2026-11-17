@@ -177,7 +177,32 @@ logoutButton.addEventListener("click", async () => {
 });
 
 // ログイン状態を確認
-onAuthStateChanged(auth, (user) => {
+
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    authMessage.textContent =
+      user.email + " でログイン中です";
+
+    signupForm.hidden = true;
+    googleLoginButton.hidden = true;
+    logoutButton.hidden = false;
+
+    await loadTasks(user);
+
+  } else {
+    authMessage.textContent =
+      "ログインして勉強記録を保存しよう！";
+
+    signupForm.hidden = false;
+    googleLoginButton.hidden = false;
+    logoutButton.hidden = true;
+
+    tasks = [];
+    renderTasks();
+    updateStats();
+  }
+});
+
   if (user) {
     authMessage.textContent =
       user.email + " でログイン中です";
