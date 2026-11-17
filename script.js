@@ -1,7 +1,23 @@
 
+// ===================================
 // Study Mate JavaScript
+// ===================================
 
+// Firebaseの設定
+const firebaseConfig = {
+  apiKey: "AIzaSyAw08btPXXb-272OtJC1nONUGPuKdQAEMA",
+  authDomain: "study-mate-88d68.firebaseapp.com",
+  projectId: "study-mate-88d68",
+  storageBucket: "study-mate-88d68.firebasestorage.app",
+  messagingSenderId: "30413754364",
+  appId: "1:30413754364:web:5a7258b22bef204cc16c79",
+  measurementId: "G-RB2LNMJ3M4"
+};
+
+// ===================================
 // HTMLの要素を取得
+// ===================================
+
 const taskForm = document.getElementById("taskForm");
 const taskTitle = document.getElementById("taskTitle");
 const taskSubject = document.getElementById("taskSubject");
@@ -13,7 +29,10 @@ const todayMinutes = document.getElementById("todayMinutes");
 const weekMinutes = document.getElementById("weekMinutes");
 const completionRate = document.getElementById("completionRate");
 
+// ===================================
 // 今日の日付を取得
+// ===================================
+
 function getToday() {
   const now = new Date();
   const year = now.getFullYear();
@@ -23,18 +42,18 @@ function getToday() {
   return `${year}-${month}-${day}`;
 }
 
-// 今日の日付を初期設定
 taskDate.value = getToday();
 
-// 保存されたタスクを読み込む
+// ===================================
+// タスクの読み込みと保存
+// ===================================
+
 let tasks = JSON.parse(
   localStorage.getItem("studyMateTasks") || "[]"
 );
 
-// 現在の表示フィルター
 let currentFilter = "all";
 
-// タスクを保存する
 function saveTasks() {
   localStorage.setItem(
     "studyMateTasks",
@@ -42,7 +61,10 @@ function saveTasks() {
   );
 }
 
-// タスクを追加する
+// ===================================
+// タスクを追加
+// ===================================
+
 taskForm.addEventListener("submit", function(event) {
   event.preventDefault();
 
@@ -75,7 +97,10 @@ taskForm.addEventListener("submit", function(event) {
   taskDate.value = getToday();
 });
 
-// タスクを表示する
+// ===================================
+// タスクを表示
+// ===================================
+
 function renderTasks() {
   taskList.replaceChildren();
 
@@ -113,7 +138,6 @@ function renderTasks() {
       item.classList.add("completed");
     }
 
-    // タスクの情報
     const info = document.createElement("div");
 
     const title = document.createElement("h3");
@@ -126,7 +150,6 @@ function renderTasks() {
     info.appendChild(title);
     info.appendChild(detail);
 
-    // 完了チェック
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.checked = task.completed;
@@ -140,7 +163,6 @@ function renderTasks() {
       updateStats();
     });
 
-    // 削除ボタン
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
     deleteButton.textContent = "削除";
@@ -167,7 +189,10 @@ function renderTasks() {
   });
 }
 
+// ===================================
 // 今週の月曜日を取得
+// ===================================
+
 function getMonday() {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
@@ -180,7 +205,10 @@ function getMonday() {
   return date;
 }
 
+// ===================================
 // 勉強時間と達成率を更新
+// ===================================
+
 function updateStats() {
   const today = getToday();
   const monday = getMonday();
@@ -216,7 +244,10 @@ function updateStats() {
   completionRate.textContent = rate + "%";
 }
 
+// ===================================
 // フィルターボタン
+// ===================================
+
 document.querySelectorAll(".filters button").forEach(function(button) {
   button.addEventListener("click", function() {
     currentFilter = button.dataset.filter;
@@ -224,6 +255,9 @@ document.querySelectorAll(".filters button").forEach(function(button) {
   });
 });
 
+// ===================================
 // 最初の画面を表示
+// ===================================
+
 renderTasks();
 updateStats();
