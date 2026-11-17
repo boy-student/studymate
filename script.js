@@ -15,7 +15,14 @@ import {
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
-import { getFirestore } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+import {
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  getDocs,
+  deleteDoc
+} from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
 // Firebaseの設定
 const firebaseConfig = {
@@ -39,6 +46,67 @@ const googleProvider = new GoogleAuthProvider();
 
 // データベース
 const db = getFirestore(app);
+
+// ===================================
+// Firestoreのタスク管理
+// ===================================
+
+// ログイン中のユーザーのタスク保存先
+function getTasksCollection(user) {
+  return collection(db, "users", user.uid, "tasks");
+}
+
+// Firestoreからタスクを読み込む
+async function loadTasks(user) {
+  try {
+    const snapshot = await getDocs(getTasksCollection(user));
+
+    tasks = snapshot.docs.map((document) => ({
+      ...document.data(),
+      id: document.id
+    }));
+
+    renderTasks();
+    updateStats();
+
+  } catch (error) {
+    console.error("タスク読み込みエラー:", error);
+    alert("勉強記録を読み込めませんでした。");
+  }
+}
+
+// Firestoreにタスクを保存する
+async function saveTaskToFirestore(task) {
+  const user = auth.currentUser;
+
+  if (!user) return;
+
+  try {
+    await setDoc(
+      doc(db, "users", user.uid, "tasks", String(task.id)),
+      task
+    );
+  } catch (error) {
+    console.error("タスク保存エラー:", error);
+    alert("勉強記録を保存できませんでした。");
+  }
+}
+
+// Firestoreからタスクを削除する
+async function deleteTaskFromFirestore(taskId) {
+  const user = auth.currentUser;
+
+  if (!user) return;
+
+  try {
+    await deleteDoc(
+      doc(db, "users", user.uid, "tasks", String(taskId))
+    );
+  } catch (error) {
+    console.error("タスク削除エラー:", error);
+    alert("タスクを削除できませんでした。");
+  }
+}
 
 // ===================================
 // ログイン・新規登録機能
