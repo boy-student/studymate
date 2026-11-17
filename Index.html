@@ -17,6 +17,41 @@
 
   <main class="container">
 
+    
+<!-- ログインエリア -->
+<section class="auth-section">
+  <h2>Study Mate アカウント</h2>
+  <p id="authMessage">ログインして勉強記録を保存しよう！</p>
+
+  <form id="signupForm">
+    <input
+      type="email"
+      id="email"
+      placeholder="メールアドレス"
+      required
+    >
+
+    <input
+      type="password"
+      id="password"
+      placeholder="パスワード（6文字以上）"
+      minlength="6"
+      required
+    >
+
+    <button type="submit">新規登録</button>
+    <button type="button" id="loginButton">ログイン</button>
+  </form>
+
+  <button type="button" id="googleLoginButton">
+    Googleでログイン
+  </button>
+
+  <button type="button" id="logoutButton" hidden>
+    ログアウト
+  </button>
+</section>
+
     <section class="welcome">
       <h2>今日も勉強を頑張ろう！</h2>
       <p>目標を決めて、一歩ずつ進んでいこう。</p>
