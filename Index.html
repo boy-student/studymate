@@ -1,0 +1,104 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Study Mate | 学習管理サイト</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <header class="header">
+    <h1>Study Mate</h1>
+    <p>毎日の勉強を、もっと楽しく。</p>
+  </header>
+
+  <main class="container">
+
+    <section class="welcome">
+      <h2>今日も勉強を頑張ろう！</h2>
+      <p>目標を決めて、一歩ずつ進んでいこう。</p>
+    </section>
+
+    <section class="stats">
+      <div class="stat-card">
+        <h3>今日の勉強時間</h3>
+        <p id="todayMinutes">0分</p>
+      </div>
+
+      <div class="stat-card">
+        <h3>今週の勉強時間</h3>
+        <p id="weekMinutes">0分</p>
+      </div>
+
+      <div class="stat-card">
+        <h3>達成率</h3>
+        <p id="completionRate">0%</p>
+      </div>
+    </section>
+
+    <section class="task-section">
+      <h2>勉強タスクを追加</h2>
+
+      <form id="taskForm">
+        <input
+          type="text"
+          id="taskTitle"
+          placeholder="勉強する内容を入力"
+          required
+        >
+
+        <select id="taskSubject" required>
+          <option value="">教科を選択</option>
+          <option value="英語">英語</option>
+          <option value="数学">数学</option>
+          <option value="国語">国語</option>
+          <option value="理科">理科</option>
+          <option value="社会">社会</option>
+          <option value="その他">その他</option>
+        </select>
+
+        <input
+          type="date"
+          id="taskDate"
+          required
+        >
+
+        <input
+          type="number"
+          id="taskDuration"
+          placeholder="勉強時間（分）"
+          min="1"
+          required
+        >
+
+        <button type="submit">タスクを追加</button>
+      </form>
+    </section>
+
+    <section class="task-list-section">
+      <h2>勉強リスト</h2>
+
+      <div class="filters">
+        <button type="button" data-filter="all">すべて</button>
+        <button type="button" data-filter="today">今日</button>
+        <button type="button" data-filter="upcoming">これから</button>
+        <button type="button" data-filter="completed">完了</button>
+      </div>
+
+      <div id="taskList">
+        <!-- JavaScriptでタスクを表示 -->
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>© 2026 Study Mate</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
