@@ -1,0 +1,256 @@
+
+/* 全体の基本設定 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  background: #f8f7fc;
+  color: #333;
+  line-height: 1.6;
+}
+
+/* ヘッダー */
+.header {
+  background: linear-gradient(135deg, #8b70d6, #b39bea);
+  color: white;
+  text-align: center;
+  padding: 35px 20px;
+}
+
+.header h1 {
+  font-size: 32px;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.header p {
+  margin-top: 8px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+/* メインコンテンツ */
+.container {
+  max-width: 1000px;
+  margin: 35px auto;
+  padding: 0 20px;
+}
+
+/* ウェルカムエリア */
+.welcome {
+  background: white;
+  padding: 30px;
+  border-radius: 18px;
+  margin-bottom: 25px;
+  box-shadow: 0 4px 15px rgba(100, 80, 150, 0.07);
+}
+
+.welcome h2 {
+  color: #7356bd;
+  margin-bottom: 8px;
+  font-size: 23px;
+}
+
+/* 勉強時間・達成率 */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-bottom: 30px;
+}
+
+.stat-card {
+  background: white;
+  padding: 25px 15px;
+  text-align: center;
+  border-radius: 16px;
+  box-shadow: 0 4px 15px rgba(100, 80, 150, 0.06);
+}
+
+.stat-card h3 {
+  color: #777;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.stat-card p {
+  color: #8064ca;
+  font-size: 27px;
+  font-weight: bold;
+}
+
+/* タスク追加エリア */
+.task-section,
+.task-list-section {
+  background: white;
+  padding: 28px;
+  border-radius: 18px;
+  margin-bottom: 25px;
+  box-shadow: 0 4px 15px rgba(100, 80, 150, 0.06);
+}
+
+.task-section h2,
+.task-list-section h2 {
+  color: #7356bd;
+  font-size: 21px;
+  margin-bottom: 20px;
+}
+
+/* 入力フォーム */
+#taskForm {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+input,
+select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #e2dcef;
+  border-radius: 9px;
+  font-size: 14px;
+  background: #fdfcff;
+  color: #333;
+  min-width: 0;
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: #9679dc;
+  box-shadow: 0 0 0 3px rgba(150, 121, 220, 0.12);
+}
+
+/* ボタン */
+button {
+  border: none;
+  border-radius: 9px;
+  padding: 12px 18px;
+  background: #8b70d6;
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+button:hover {
+  background: #7356bd;
+  transform: translateY(-2px);
+}
+
+/* フィルター */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.filters button {
+  background: #eee9fa;
+  color: #7356bd;
+}
+
+.filters button:hover {
+  background: #dcd1f5;
+}
+
+/* タスクリスト */
+#taskList {
+  display: grid;
+  gap: 12px;
+}
+
+.task-item {
+  background: #faf9fd;
+  border: 1px solid #eee9f7;
+  border-radius: 12px;
+  padding: 17px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.task-item.completed {
+  opacity: 0.6;
+}
+
+.task-item.completed h3 {
+  text-decoration: line-through;
+}
+
+.task-item h3 {
+  color: #55447f;
+  font-size: 16px;
+}
+
+.task-item p {
+  color: #888;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.task-item input[type="checkbox"] {
+  width: auto;
+  accent-color: #8b70d6;
+}
+
+.task-item button {
+  background: #e9e2f8;
+  color: #7356bd;
+  padding: 8px 12px;
+}
+
+/* フッター */
+footer {
+  text-align: center;
+  padding: 25px;
+  color: #999;
+  font-size: 13px;
+}
+
+/* スマホ対応 */
+@media (max-width: 700px) {
+  .header {
+    padding: 28px 15px;
+  }
+
+  .header h1 {
+    font-size: 27px;
+  }
+
+  .container {
+    margin: 20px auto;
+    padding: 0 14px;
+  }
+
+  .stats {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .stat-card {
+    padding: 18px;
+  }
+
+  #taskForm {
+    grid-template-columns: 1fr;
+  }
+
+  .task-section,
+  .task-list-section {
+    padding: 20px;
+  }
+
+  .task-item {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+}
