@@ -3,6 +3,12 @@
 // Study Mate JavaScript
 // ===================================
 
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+
+import { getAuth, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+
+import { getFirestore } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
 // Firebaseの設定
 const firebaseConfig = {
   apiKey: "AIzaSyAw08btPXXb-272OtJC1nONUGPuKdQAEMA",
@@ -13,6 +19,18 @@ const firebaseConfig = {
   appId: "1:30413754364:web:5a7258b22bef204cc16c79",
   measurementId: "G-RB2LNMJ3M4"
 };
+
+// Firebaseを初期化
+const app = initializeApp(firebaseConfig);
+
+// ログイン機能
+const auth = getAuth(app);
+
+// Googleログイン
+const googleProvider = new GoogleAuthProvider();
+
+// データベース
+const db = getFirestore(app);
 
 // ===================================
 // HTMLの要素を取得
