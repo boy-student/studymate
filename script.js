@@ -24,7 +24,11 @@ import {
   deleteDoc
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
-// Firebaseの設定
+
+// ===================================
+// Firebase設定
+// ===================================
+
 const firebaseConfig = {
   apiKey: "AIzaSyAw08btPXXb-272OtJC1nONUGPuKdQAEMA",
   authDomain: "study-mate-88d68.firebaseapp.com",
@@ -35,33 +39,138 @@ const firebaseConfig = {
   measurementId: "G-RB2LNMJ3M4"
 };
 
-// Firebaseを初期化
+
+// ===================================
+// Firebase初期化
+// ===================================
+
 const app = initializeApp(firebaseConfig);
-
-// ログイン機能
 const auth = getAuth(app);
-
-// Googleログイン
-const googleProvider = new GoogleAuthProvider();
-
-// データベース
 const db = getFirestore(app);
 
+const googleProvider = new GoogleAuthProvider();
+
+
 // ===================================
-// Firestoreのタスク管理
+// HTML要素取得
 // ===================================
 
-// ログイン中のユーザーのタスク保存先
+// ログイン画面
+const authScreen = document.getElementById("authScreen");
+const appContent = document.getElementById("appContent");
+
+const signupForm = document.getElementById("signupForm");
+
+const emailInput = document.getElementById("email");
+const passwordInput = document.getElementById("password");
+
+const loginButton = document.getElementById("loginButton");
+const googleLoginButton = document.getElementById("googleLoginButton");
+
+const logoutButton = document.getElementById("logoutButton");
+const appLogoutButton = document.getElementById("appLogoutButton");
+
+const authMessage = document.getElementById("authMessage");
+
+
+// 勉強管理画面
+const taskForm = document.getElementById("taskForm");
+
+const taskTitle = document.getElementById("taskTitle");
+const taskSubject = document.getElementById("taskSubject");
+const taskDate = document.getElementById("taskDate");
+const taskDuration = document.getElementById("taskDuration");
+
+const taskList = document.getElementById("taskList");
+
+const todayMinutes = document.getElementById("todayMinutes");
+const weekMinutes = document.getElementById("weekMinutes");
+const completionRate = document.getElementById("completionRate");
+
+
+// ===================================
+// アプリの状態
+// ===================================
+
+let tasks = [];
+let currentFilter = "all";
+
+
+// ===================================
+// 日付取得
+// ===================================
+
+function getToday() {
+  const now = new Date();
+
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+taskDate.value = getToday();
+
+
+// ===================================
+// メッセージ表示
+// ===================================
+
+function showAuthMessage(message) {
+  authMessage.textContent = message;
+}
+
+
+// ===================================
+// 画面切り替え
+// ===================================
+
+function showLoginScreen() {
+  authScreen.hidden = false;
+  appContent.hidden = true;
+
+  signupForm.hidden = false;
+  googleLoginButton.hidden = false;
+  logoutButton.hidden = true;
+}
+
+function showAppScreen(user) {
+  authScreen.hidden = true;
+  appContent.hidden = false;
+
+  signupForm.hidden = true;
+  googleLoginButton.hidden = true;
+  logoutButton.hidden = true;
+
+  console.log("ログイン中:", user.email);
+}
+
+
+// ===================================
+// Firestoreのタスク保存先
+// ===================================
+
 function getTasksCollection(user) {
   return collection(db, "users", user.uid, "tasks");
 }
 
+
+// ===================================
 // Firestoreからタスクを読み込む
+// ===================================
+
 async function loadTasks(user) {
   try {
-    const snapshot = await getDocs(getTasksCollection(user));
+    const snapshot = await getDocs(
+      getTasksCollection(user)
+    );
 
-    tasks = snapshot.docs.map((document) => ({
+    // 読み込み中に別のユーザーへ
+    // 切り替わっていないか確認
+    if (auth.currentUser?.uid !== user.uid) return;
+
+    tasks = snapshot.docs.map(document => ({
       ...document.data(),
       id: document.id
     }));
@@ -71,11 +180,16 @@ async function loadTasks(user) {
 
   } catch (error) {
     console.error("タスク読み込みエラー:", error);
+
     alert("勉強記録を読み込めませんでした。");
   }
 }
 
-// Firestoreにタスクを保存する
+
+// ===================================
+// Firestoreにタスクを保存
+// ===================================
+
 async function saveTaskToFirestore(task) {
   const user = auth.currentUser;
 
@@ -86,13 +200,19 @@ async function saveTaskToFirestore(task) {
       doc(db, "users", user.uid, "tasks", String(task.id)),
       task
     );
+
   } catch (error) {
     console.error("タスク保存エラー:", error);
+
     alert("勉強記録を保存できませんでした。");
   }
 }
 
-// Firestoreからタスクを削除する
+
+// ===================================
+// Firestoreからタスクを削除
+// ===================================
+
 async function deleteTaskFromFirestore(taskId) {
   const user = auth.currentUser;
 
@@ -102,177 +222,163 @@ async function deleteTaskFromFirestore(taskId) {
     await deleteDoc(
       doc(db, "users", user.uid, "tasks", String(taskId))
     );
+
   } catch (error) {
     console.error("タスク削除エラー:", error);
+
     alert("タスクを削除できませんでした。");
   }
 }
 
+
 // ===================================
-// ログイン・新規登録機能
-// ===================================
-
-const signupForm = document.getElementById("signupForm");
-const emailInput = document.getElementById("email");
-const passwordInput = document.getElementById("password");
-
-const loginButton = document.getElementById("loginButton");
-const googleLoginButton = document.getElementById("googleLoginButton");
-const logoutButton = document.getElementById("logoutButton");
-
-const authMessage = document.getElementById("authMessage");
-
 // 新規登録
-signupForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
+// ===================================
+
+signupForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const email = emailInput.value.trim();
+  const password = passwordInput.value;
 
   try {
+    showAuthMessage("アカウントを作成しています...");
+
     await createUserWithEmailAndPassword(
       auth,
-      emailInput.value,
-      passwordInput.value
+      email,
+      password
     );
 
-    alert("新規登録が完了しました！");
+    showAuthMessage("新規登録が完了しました！");
+
   } catch (error) {
+    console.error(error);
+
+    showAuthMessage("新規登録に失敗しました。");
+
     alert("登録エラー：" + error.message);
   }
 });
 
+
+// ===================================
 // メールアドレスでログイン
+// ===================================
+
 loginButton.addEventListener("click", async () => {
+  const email = emailInput.value.trim();
+  const password = passwordInput.value;
+
+  if (!email || !password) {
+    alert("メールアドレスとパスワードを入力してください。");
+    return;
+  }
+
   try {
+    showAuthMessage("ログインしています...");
+
     await signInWithEmailAndPassword(
       auth,
-      emailInput.value,
-      passwordInput.value
+      email,
+      password
     );
 
-    alert("ログインしました！");
+    showAuthMessage("ログインしました！");
+
   } catch (error) {
+    console.error(error);
+
+    showAuthMessage("ログインに失敗しました。");
+
     alert("ログインエラー：" + error.message);
   }
 });
 
-// Googleでログイン
+
+// ===================================
+// Googleログイン
+// ===================================
+
 googleLoginButton.addEventListener("click", async () => {
   try {
+    showAuthMessage("Googleログインしています...");
+
     await signInWithPopup(auth, googleProvider);
 
-    alert("Googleログインしました！");
+    showAuthMessage("Googleログインしました！");
+
   } catch (error) {
+    console.error(error);
+
+    showAuthMessage("Googleログインに失敗しました。");
+
     alert("Googleログインエラー：" + error.message);
   }
 });
 
+
+// ===================================
 // ログアウト
-logoutButton.addEventListener("click", async () => {
+// ===================================
+
+async function logout() {
   try {
     await signOut(auth);
 
     alert("ログアウトしました！");
+
   } catch (error) {
+    console.error(error);
+
     alert("ログアウトエラー：" + error.message);
   }
-});
+}
 
-// ログイン状態を確認
+appLogoutButton.addEventListener("click", logout);
+
+logoutButton.addEventListener("click", logout);
+
+
+// ===================================
+// ログイン状態の監視
+// ===================================
 
 onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    authMessage.textContent =
-      user.email + " でログイン中です";
 
-    signupForm.hidden = true;
-    googleLoginButton.hidden = true;
-    logoutButton.hidden = false;
+  if (user) {
+
+    showAppScreen(user);
 
     await loadTasks(user);
 
   } else {
-    authMessage.textContent =
-      "ログインして勉強記録を保存しよう！";
 
-    signupForm.hidden = false;
-    googleLoginButton.hidden = false;
-    logoutButton.hidden = true;
+    showLoginScreen();
 
     tasks = [];
+
     renderTasks();
     updateStats();
+
   }
+
 });
 
-  if (user) {
-    authMessage.textContent =
-      user.email + " でログイン中です";
-
-    signupForm.hidden = true;
-    googleLoginButton.hidden = true;
-    logoutButton.hidden = false;
-  } else {
-    authMessage.textContent =
-      "ログインして勉強記録を保存しよう！";
-
-    signupForm.hidden = false;
-    googleLoginButton.hidden = false;
-    logoutButton.hidden = true;
-  }
-});
-
-// ===================================
-// HTMLの要素を取得
-// ===================================
-
-const taskForm = document.getElementById("taskForm");
-const taskTitle = document.getElementById("taskTitle");
-const taskSubject = document.getElementById("taskSubject");
-const taskDate = document.getElementById("taskDate");
-const taskDuration = document.getElementById("taskDuration");
-const taskList = document.getElementById("taskList");
-
-const todayMinutes = document.getElementById("todayMinutes");
-const weekMinutes = document.getElementById("weekMinutes");
-const completionRate = document.getElementById("completionRate");
-
-// ===================================
-// 今日の日付を取得
-// ===================================
-
-function getToday() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
-taskDate.value = getToday();
-
-// ===================================
-// タスクの読み込みと保存
-// ===================================
-
-let tasks = JSON.parse(
-  localStorage.getItem("studyMateTasks") || "[]"
-);
-
-let currentFilter = "all";
-
-function saveTasks() {
-  localStorage.setItem(
-    "studyMateTasks",
-    JSON.stringify(tasks)
-  );
-}
 
 // ===================================
 // タスクを追加
 // ===================================
 
-taskForm.addEventListener("submit", function(event) {
+taskForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+
+  const user = auth.currentUser;
+
+  if (!user) {
+    alert("ログインしてください。");
+    return;
+  }
 
   const title = taskTitle.value.trim();
   const subject = taskSubject.value;
@@ -286,33 +392,40 @@ taskForm.addEventListener("submit", function(event) {
 
   const newTask = {
     id: Date.now().toString() + Math.random(),
-    title: title,
-    subject: subject,
-    date: date,
-    duration: duration,
+    title,
+    subject,
+    date,
+    duration,
     completed: false
   };
 
+  await saveTaskToFirestore(newTask);
+
+  if (auth.currentUser?.uid !== user.uid) return;
+
   tasks.push(newTask);
 
-  saveTasks();
   renderTasks();
   updateStats();
 
   taskForm.reset();
   taskDate.value = getToday();
+
 });
+
 
 // ===================================
 // タスクを表示
 // ===================================
 
 function renderTasks() {
+
   taskList.replaceChildren();
 
   const today = getToday();
 
-  let filteredTasks = tasks.filter(function(task) {
+  const filteredTasks = tasks.filter(task => {
+
     if (currentFilter === "today") {
       return task.date === today;
     }
@@ -326,107 +439,177 @@ function renderTasks() {
     }
 
     return true;
+
   });
 
   if (filteredTasks.length === 0) {
+
     const message = document.createElement("p");
+
     message.textContent = "タスクはまだありません。";
     message.style.color = "#999";
+
     taskList.appendChild(message);
+
     return;
   }
 
-  filteredTasks.forEach(function(task) {
+
+  filteredTasks.forEach(task => {
+
     const item = document.createElement("div");
+
     item.className = "task-item";
 
     if (task.completed) {
       item.classList.add("completed");
     }
 
+
+    // タスク情報
     const info = document.createElement("div");
 
     const title = document.createElement("h3");
+
     title.textContent = task.title;
 
     const detail = document.createElement("p");
+
     detail.textContent =
       `${task.subject} ｜ ${task.date} ｜ ${task.duration}分`;
 
     info.appendChild(title);
     info.appendChild(detail);
 
+
+    // 完了チェック
     const checkbox = document.createElement("input");
+
     checkbox.type = "checkbox";
     checkbox.checked = task.completed;
+
     checkbox.setAttribute("aria-label", "タスク完了");
 
-    checkbox.addEventListener("change", function() {
+    checkbox.addEventListener("change", async () => {
+
+      const user = auth.currentUser;
+
+      if (!user) return;
+
+      const previousValue = task.completed;
+
       task.completed = checkbox.checked;
 
-      saveTasks();
       renderTasks();
       updateStats();
-    });
 
-    const deleteButton = document.createElement("button");
-    deleteButton.type = "button";
-    deleteButton.textContent = "削除";
+      await saveTaskToFirestore(task);
 
-    deleteButton.addEventListener("click", function() {
-      const confirmed = confirm("このタスクを削除しますか？");
+      if (auth.currentUser?.uid !== user.uid) return;
 
-      if (confirmed) {
-        tasks = tasks.filter(function(t) {
-          return t.id !== task.id;
-        });
-
-        saveTasks();
+      // 保存エラーが起きた場合は再読み込みで確認する
+      // 保存状態の不一致を避けるため
+      if (task.completed !== checkbox.checked) {
+        task.completed = previousValue;
         renderTasks();
         updateStats();
       }
+
     });
+
+
+    // 削除ボタン
+    const deleteButton = document.createElement("button");
+
+    deleteButton.type = "button";
+    deleteButton.textContent = "削除";
+
+    deleteButton.addEventListener("click", async () => {
+
+      const confirmed = confirm(
+        "このタスクを削除しますか？"
+      );
+
+      if (!confirmed) return;
+
+      const user = auth.currentUser;
+
+      if (!user) return;
+
+      await deleteTaskFromFirestore(task.id);
+
+      if (auth.currentUser?.uid !== user.uid) return;
+
+      tasks = tasks.filter(t => t.id !== task.id);
+
+      renderTasks();
+      updateStats();
+
+    });
+
 
     item.appendChild(info);
     item.appendChild(checkbox);
     item.appendChild(deleteButton);
 
     taskList.appendChild(item);
+
   });
+
 }
+
 
 // ===================================
 // 今週の月曜日を取得
 // ===================================
 
 function getMonday() {
+
   const date = new Date();
+
   date.setHours(0, 0, 0, 0);
 
   const day = date.getDay();
+
   const difference = day === 0 ? -6 : 1 - day;
 
   date.setDate(date.getDate() + difference);
 
   return date;
+
 }
+
 
 // ===================================
 // 勉強時間と達成率を更新
 // ===================================
 
 function updateStats() {
+
   const today = getToday();
+
   const monday = getMonday();
 
-  const todayTotal = tasks
-    .filter(task =>
-      task.completed && task.date === today
-    )
-    .reduce((total, task) => total + task.duration, 0);
 
+  // 今日の勉強時間
+  const todayTotal = tasks
+
+    .filter(task =>
+      task.completed &&
+      task.date === today
+    )
+
+    .reduce(
+      (total, task) => total + task.duration,
+      0
+    );
+
+
+  // 今週の勉強時間
   const weekTotal = tasks
+
     .filter(task => {
+
       const date = new Date(task.date + "T00:00:00");
 
       return (
@@ -434,36 +617,59 @@ function updateStats() {
         date >= monday &&
         date <= new Date(today + "T23:59:59")
       );
-    })
-    .reduce((total, task) => total + task.duration, 0);
 
+    })
+
+    .reduce(
+      (total, task) => total + task.duration,
+      0
+    );
+
+
+  // 達成率
   const completedCount = tasks.filter(
     task => task.completed
   ).length;
 
   const rate = tasks.length === 0
     ? 0
-    : Math.round((completedCount / tasks.length) * 100);
+    : Math.round(
+        (completedCount / tasks.length) * 100
+      );
+
 
   todayMinutes.textContent = todayTotal + "分";
+
   weekMinutes.textContent = weekTotal + "分";
+
   completionRate.textContent = rate + "%";
+
 }
+
 
 // ===================================
 // フィルターボタン
 // ===================================
 
-document.querySelectorAll(".filters button").forEach(function(button) {
-  button.addEventListener("click", function() {
+document.querySelectorAll(".filters button").forEach(button => {
+
+  button.addEventListener("click", () => {
+
     currentFilter = button.dataset.filter;
+
     renderTasks();
+
   });
+
 });
 
+
 // ===================================
-// 最初の画面を表示
+// 初期表示
 // ===================================
 
 renderTasks();
+
 updateStats();
+
+console.log("Study Mate 起動完了！");
