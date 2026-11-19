@@ -193,6 +193,67 @@
 
     </main>
 
+
+      <!-- 友達・タイムライン・記録画面 -->
+      <section id="socialArea" class="social-area" hidden>
+        <div class="social-top">
+          <h2 id="socialTitle">友達</h2>
+          <div class="social-actions">
+            <button type="button" id="searchFriendButton">友達を検索</button>
+            <button type="button" id="addFriendButton">友達追加</button>
+          </div>
+        </div>
+
+        <div class="social-tabs">
+          <button type="button" class="social-tab active" data-social-tab="friends">友達</button>
+          <button type="button" class="social-tab" data-social-tab="groups">グループ</button>
+        </div>
+
+        <section id="friendsPanel" class="social-panel">
+          <h3 id="friendCount">友達</h3>
+          <div id="friendList" class="friend-list">
+            <p class="empty-state">友達を読み込んでいます...</p>
+          </div>
+          <section class="request-section">
+            <h3>届いている友達申請</h3>
+            <div id="incomingRequests" class="friend-list"></div>
+          </section>
+        </section>
+
+        <section id="groupsPanel" class="social-panel" hidden>
+          <p class="empty-state">グループ機能は次の開発ステップで追加する予定です。</p>
+        </section>
+
+        <section id="friendProfilePanel" class="social-panel" hidden>
+          <button type="button" id="backToFriendsButton" class="back-button">← 友達一覧へ戻る</button>
+          <div id="friendProfileContent"></div>
+        </section>
+
+        <section id="timelinePanel" class="social-panel" hidden>
+          <h3>友達のタイムライン</h3>
+          <div id="timelineList" class="timeline-list"></div>
+        </section>
+
+        <section id="recordsPanel" class="social-panel" hidden>
+          <h3>勉強を報告する</h3>
+          <form id="studyReportForm" class="report-form">
+            <input id="reportSubject" type="text" placeholder="教科（例：数学）" required>
+            <input id="reportMinutes" type="number" min="1" max="1440" placeholder="勉強時間（分）" required>
+            <input id="reportComment" type="text" maxlength="120" placeholder="ひとこと（任意）">
+            <button type="submit">勉強を報告</button>
+          </form>
+          <h3>自分の勉強報告</h3>
+          <div id="myReportsList" class="timeline-list"></div>
+        </section>
+      </section>
+
+      <nav id="bottomNavigation" class="bottom-navigation" aria-label="メインナビゲーション">
+        <button type="button" class="nav-item active" data-page="friends"><span>♧</span>友達</button>
+        <button type="button" class="nav-item" data-page="timeline"><span>◷</span>タイムライン</button>
+        <button type="button" class="nav-item" data-page="records"><span>▤</span>記録</button>
+        <button type="button" class="nav-item" data-page="home"><span>⌂</span>ホーム</button>
+      </nav>
+
     <footer>
       <p>© 2026 Study Mate</p>
     </footer>

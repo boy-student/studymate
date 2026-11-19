@@ -773,3 +773,76 @@ footer {
   }
 
 }
+
+
+/* ===================================
+   Study Mate 友達・SNS画面
+=================================== */
+.social-area {
+  width: min(100% - 28px, 900px);
+  margin: 28px auto 110px;
+}
+.social-top {
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; margin-bottom:20px;
+}
+.social-top h2 { color:var(--purple-dark); font-size:27px; }
+.social-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.social-actions button, .report-form button {
+  background:var(--purple); color:white; border-radius:22px;
+  padding:10px 15px; font-weight:700;
+}
+.social-tabs { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:22px; }
+.social-tab { background:#eee9fa; color:var(--purple-dark); border-radius:24px; padding:12px; font-weight:700; }
+.social-tab.active { background:var(--purple); color:white; }
+.social-panel { background:white; border-radius:20px; padding:22px; box-shadow:0 4px 15px rgba(100,80,150,.06); }
+.social-panel h3 { color:var(--purple-dark); margin:4px 0 16px; }
+.friend-list, .timeline-list { display:grid; gap:10px; }
+.friend-row {
+  display:flex; align-items:center; gap:13px; padding:13px;
+  border:1px solid #eee9f7; border-radius:16px; background:#fdfcff;
+}
+.friend-avatar {
+  width:52px; height:52px; border-radius:50%; background:#eee7ff;
+  display:grid; place-items:center; color:var(--purple-dark);
+  font-size:22px; font-weight:800; flex-shrink:0;
+}
+.friend-main { flex:1; min-width:0; }
+.friend-main strong { display:block; color:#39334f; }
+.friend-main p { color:#77738a; font-size:13px; overflow-wrap:anywhere; }
+.friend-time { color:#999; font-size:12px; white-space:nowrap; }
+.friend-open { border:0; background:transparent; color:var(--purple-dark); font-weight:700; }
+.empty-state { color:#999; padding:18px 4px; }
+.request-section { border-top:1px solid #eee9f7; margin-top:22px; padding-top:18px; }
+.request-actions { display:flex; gap:8px; }
+.request-actions button { padding:8px 12px; border-radius:12px; background:#eee9fa; color:var(--purple-dark); }
+.request-actions button.accept { background:var(--purple); color:white; }
+.back-button { background:#eee9fa; color:var(--purple-dark); border-radius:18px; padding:9px 14px; margin-bottom:18px; }
+.profile-heading { display:flex; align-items:center; gap:16px; margin-bottom:20px; }
+.profile-heading .friend-avatar { width:76px; height:76px; font-size:30px; }
+.profile-subtabs { display:flex; gap:8px; flex-wrap:wrap; margin:15px 0; }
+.profile-subtabs button { background:#eee9fa; color:var(--purple-dark); border-radius:18px; padding:9px 13px; }
+.profile-subtabs button.active { background:var(--purple); color:white; }
+.report-form { display:grid; gap:10px; margin-bottom:25px; }
+.report-form input { width:100%; padding:13px; border:1px solid #e5def5; border-radius:12px; font:inherit; }
+.timeline-card { border:1px solid #eee9f7; background:#fdfcff; padding:15px; border-radius:15px; }
+.timeline-card strong { color:#55447f; }
+.timeline-card p { margin-top:5px; color:#666; }
+.timeline-card small { display:block; color:#999; margin-top:7px; }
+.bottom-navigation {
+  position:fixed; z-index:20; left:50%; transform:translateX(-50%);
+  bottom:12px; width:min(680px, calc(100% - 24px));
+  display:grid; grid-template-columns:repeat(4,1fr); gap:3px;
+  padding:9px 8px calc(9px + env(safe-area-inset-bottom));
+  background:rgba(255,255,255,.96); border:1px solid #eee9f7;
+  border-radius:22px; box-shadow:0 8px 30px rgba(70,50,120,.14);
+}
+.nav-item { display:flex; flex-direction:column; align-items:center; gap:3px; background:transparent; color:#9993ad; padding:5px 2px; font-size:11px; border-radius:14px; }
+.nav-item span { font-size:22px; line-height:1.1; }
+.nav-item.active { color:var(--purple); background:#f3efff; font-weight:800; }
+@media(max-width:700px) {
+  .social-area { margin-top:18px; }
+  .social-panel { padding:16px; }
+  .social-top { align-items:flex-start; flex-direction:column; }
+  .friend-time { font-size:11px; }
+}

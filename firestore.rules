@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function pairId(a, b) {
+      return a < b ? a + "_" + b : b + "_" + a;
+    }
+    function areFriends(uid) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/friendships/$(pairId(request.auth.uid, uid)))
+        && get(/databases/$(database)/documents/friendships/$(pairId(request.auth.uid, uid))).data.status == "accepted";
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(["displayName","username","photoURL","bio","createdAt","updatedAt"]);
+      allow update: if signedIn() && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(["displayName","username","photoURL","bio","createdAt","updatedAt"]);
+      allow delete: if signedIn() && request.auth.uid == userId;
+
+      match /tasks/{taskId} {
+        allow read, write: if signedIn() && request.auth.uid == userId;
+      }
+      match /studyRecords/{recordId} {
+        allow create: if signedIn() && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly(["subject","minutes","comment","createdAt"])
+          && request.resource.data.minutes is int
+          && request.resource.data.minutes > 0
+          && request.resource.data.minutes <= 1440;
+        allow read: if signedIn() && (request.auth.uid == userId || areFriends(userId));
+        allow update, delete: if signedIn() && request.auth.uid == userId;
+      }
+    }
+
+    match /friendships/{friendshipId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(["members","requesterUid","recipientUid","status","createdAt"])
+        && request.resource.data.members is list
+        && request.resource.data.members.size() == 2
+        && request.auth.uid in request.resource.data.members
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.resource.data.recipientUid in request.resource.data.members
+        && request.resource.data.recipientUid != request.auth.uid
+        && request.resource.data.status == "pending";
+      allow update: if signedIn()
+        && request.auth.uid == resource.data.recipientUid
+        && resource.data.status == "pending"
+        && request.resource.data.status == "accepted"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","acceptedAt"]);
+      allow delete: if signedIn() && request.auth.uid in resource.data.members;
+    }
+  }
+}

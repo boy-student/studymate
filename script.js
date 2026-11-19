@@ -21,7 +21,15 @@ import {
   doc,
   setDoc,
   getDocs,
-  deleteDoc
+  deleteDoc,
+  getDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  onSnapshot,
+  updateDoc,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
 
@@ -673,3 +681,349 @@ renderTasks();
 updateStats();
 
 console.log("Study Mate 起動完了！");
+
+
+// ===================================
+// 友達・勉強報告機能
+// ===================================
+const socialArea = document.getElementById("socialArea");
+const bottomNavigation = document.getElementById("bottomNavigation");
+const friendListEl = document.getElementById("friendList");
+const incomingRequestsEl = document.getElementById("incomingRequests");
+const friendCountEl = document.getElementById("friendCount");
+const profilePanel = document.getElementById("friendProfilePanel");
+const profileContent = document.getElementById("friendProfileContent");
+const timelineListEl = document.getElementById("timelineList");
+const myReportsListEl = document.getElementById("myReportsList");
+let activeSocialPage = "friends";
+let friendUnsubscribe = null;
+let requestUnsubscribe = null;
+let friendProfilesCache = new Map();
+
+function pairId(uidA, uidB) {
+  return [uidA, uidB].sort().join("_");
+}
+function relativeTime(value) {
+  if (!value) return "日時不明";
+  const date = value.toDate ? value.toDate() : new Date(value);
+  const minutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000));
+  if (minutes < 1) return "たった今";
+  if (minutes < 60) return `${minutes}分前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}時間前`;
+  const days = Math.floor(hours / 24);
+  return `${days}日前`;
+}
+function showSocialPage(page) {
+  activeSocialPage = page;
+  document.querySelector(".container").hidden = page !== "home";
+  socialArea.hidden = page === "home";
+  bottomNavigation.hidden = false;
+  document.querySelectorAll(".nav-item").forEach(button =>
+    button.classList.toggle("active", button.dataset.page === page)
+  );
+  document.getElementById("friendsPanel").hidden = page !== "friends";
+  document.getElementById("timelinePanel").hidden = page !== "timeline";
+  document.getElementById("recordsPanel").hidden = page !== "records";
+  profilePanel.hidden = true;
+  document.getElementById("socialTitle").textContent =
+    ({friends:"友達", timeline:"タイムライン", records:"記録"}[page] || "Study Mate");
+  if (page === "timeline") loadFriendsTimeline();
+  if (page === "records") loadMyReports();
+}
+document.querySelectorAll(".nav-item").forEach(button => {
+  button.addEventListener("click", () => showSocialPage(button.dataset.page));
+});
+document.querySelectorAll(".social-tab").forEach(button => {
+  button.addEventListener("click", () => {
+    document.querySelectorAll(".social-tab").forEach(b => b.classList.toggle("active", b === button));
+    document.getElementById("friendsPanel").hidden = button.dataset.socialTab !== "friends";
+    document.getElementById("groupsPanel").hidden = button.dataset.socialTab !== "groups";
+  });
+});
+
+async function ensureUserProfile(user) {
+  const ref = doc(db, "users", user.uid);
+  const snap = await getDoc(ref);
+  if (snap.exists()) return snap.data();
+
+  const displayName = (user.displayName || prompt("Study Mateで表示する名前を入力してください") || "Study Mateユーザー").trim();
+  let username = (prompt("ユーザーIDを入力してください（英数字と_、3〜20文字）") || `user_${user.uid.slice(0,8)}`)
+    .trim().toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0,20);
+  if (username.length < 3) username = `user_${user.uid.slice(0,8)}`;
+  const profile = {
+    displayName: displayName.slice(0,30),
+    username,
+    photoURL: user.photoURL || "",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
+  await setDoc(ref, profile);
+  return profile;
+}
+
+function renderFriendRow(profile, activity, onOpen) {
+  const row = document.createElement("div");
+  row.className = "friend-row";
+  const avatar = document.createElement("div");
+  avatar.className = "friend-avatar";
+  avatar.textContent = (profile.displayName || "?").slice(0,1);
+  const main = document.createElement("div");
+  main.className = "friend-main";
+  const name = document.createElement("strong");
+  name.textContent = profile.displayName || "名前未設定";
+  const detail = document.createElement("p");
+  detail.textContent = activity ? `${activity.subject}を${activity.minutes}分勉強した${activity.comment ? "・" + activity.comment : ""}` : "まだ勉強報告がありません";
+  main.append(name, detail);
+  const time = document.createElement("span");
+  time.className = "friend-time";
+  time.textContent = activity ? relativeTime(activity.createdAt) : "";
+  const open = document.createElement("button");
+  open.className = "friend-open";
+  open.type = "button";
+  open.textContent = "見る";
+  open.addEventListener("click", onOpen);
+  row.append(avatar, main, time, open);
+  return row;
+}
+
+function listenFriends(user) {
+  if (friendUnsubscribe) friendUnsubscribe();
+  const q = query(collection(db, "friendships"), where("members", "array-contains", user.uid), where("status", "==", "accepted"));
+  friendUnsubscribe = onSnapshot(q, async snapshot => {
+    friendListEl.replaceChildren();
+    friendProfilesCache.clear();
+    const docs = snapshot.docs;
+    friendCountEl.textContent = `友達 ${docs.length}人`;
+    if (!docs.length) {
+      friendListEl.innerHTML = '<p class="empty-state">まだ友達がいません。「友達を検索」から追加してみよう！</p>';
+      return;
+    }
+    for (const friendship of docs) {
+      const data = friendship.data();
+      const friendUid = data.members.find(uid => uid !== user.uid);
+      if (!friendUid) continue;
+      const userSnap = await getDoc(doc(db, "users", friendUid));
+      if (!userSnap.exists()) continue;
+      const profile = userSnap.data();
+      friendProfilesCache.set(friendUid, profile);
+      const records = await getDocs(query(collection(db, "users", friendUid, "studyRecords"), orderBy("createdAt", "desc"), limit(1)));
+      const activity = records.empty ? null : {id:records.docs[0].id, ...records.docs[0].data()};
+      friendListEl.appendChild(renderFriendRow(profile, activity, () => openFriendProfile(friendUid, profile)));
+    }
+  }, error => {
+    console.error(error);
+    friendListEl.textContent = "友達を読み込めませんでした。Firestoreルールを確認してください。";
+  });
+
+  if (requestUnsubscribe) requestUnsubscribe();
+  const rq = query(collection(db, "friendships"), where("members", "array-contains", user.uid), where("status", "==", "pending"));
+  requestUnsubscribe = onSnapshot(rq, async snapshot => {
+    incomingRequestsEl.replaceChildren();
+    if (snapshot.empty) {
+      incomingRequestsEl.innerHTML = '<p class="empty-state">新しい申請はありません。</p>';
+      return;
+    }
+    for (const requestDoc of snapshot.docs) {
+      const data = requestDoc.data();
+      if (data.recipientUid !== user.uid) continue;
+      const senderSnap = await getDoc(doc(db, "users", data.requesterUid));
+      const sender = senderSnap.exists() ? senderSnap.data() : {displayName:"ユーザー"};
+      const row = document.createElement("div");
+      row.className = "friend-row";
+      const main = document.createElement("div");
+      main.className = "friend-main";
+      const title = document.createElement("strong");
+      title.textContent = `${sender.displayName}さんから友達申請`;
+      const actions = document.createElement("div");
+      actions.className = "request-actions";
+      const accept = document.createElement("button");
+      accept.className = "accept";
+      accept.textContent = "承認";
+      accept.onclick = async () => updateDoc(requestDoc.ref, {status:"accepted", acceptedAt:serverTimestamp()});
+      const reject = document.createElement("button");
+      reject.textContent = "拒否";
+      reject.onclick = async () => deleteDoc(requestDoc.ref);
+      actions.append(accept, reject);
+      main.append(title, actions);
+      row.append(main);
+      incomingRequestsEl.append(row);
+    }
+  });
+}
+
+async function searchAndRequestFriend() {
+  const user = auth.currentUser;
+  if (!user) return;
+  const username = (prompt("追加したい相手のユーザーIDを入力してください") || "").trim().toLowerCase();
+  if (!username) return;
+  const found = await getDocs(query(collection(db, "users"), where("username", "==", username), limit(2)));
+  if (found.empty) return alert("そのユーザーIDは見つかりませんでした。");
+  const target = found.docs[0];
+  if (target.id === user.uid) return alert("自分自身には申請できません。");
+  const friendshipRef = doc(db, "friendships", pairId(user.uid, target.id));
+  const existing = await getDoc(friendshipRef);
+  if (existing.exists()) return alert("申請済み、または既に友達です。");
+  await setDoc(friendshipRef, {
+    members:[user.uid, target.id],
+    requesterUid:user.uid,
+    recipientUid:target.id,
+    status:"pending",
+    createdAt:serverTimestamp()
+  });
+  alert("友達申請を送信しました！");
+}
+document.getElementById("searchFriendButton").addEventListener("click", searchAndRequestFriend);
+document.getElementById("addFriendButton").addEventListener("click", searchAndRequestFriend);
+
+async function openFriendProfile(friendUid, profile) {
+  document.getElementById("friendsPanel").hidden = true;
+  profilePanel.hidden = false;
+  document.getElementById("socialTitle").textContent = profile.displayName || "友達プロフィール";
+  profileContent.replaceChildren();
+  const heading = document.createElement("div");
+  heading.className = "profile-heading";
+  const avatar = document.createElement("div");
+  avatar.className = "friend-avatar";
+  avatar.textContent = (profile.displayName || "?").slice(0,1);
+  const nameBlock = document.createElement("div");
+  const name = document.createElement("h2");
+  name.textContent = profile.displayName || "名前未設定";
+  const about = document.createElement("p");
+  about.textContent = profile.bio || "プロフィール";
+  nameBlock.append(name, about);
+  heading.append(avatar, nameBlock);
+  profileContent.append(heading);
+
+  const tabs = document.createElement("div");
+  tabs.className = "profile-subtabs";
+  ["記録","タイムライン","予定","プロフィール"].forEach(label => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.onclick = () => showFriendSection(friendUid, profile, label, content);
+    tabs.append(b);
+  });
+  const content = document.createElement("div");
+  profileContent.append(tabs, content);
+  await showFriendSection(friendUid, profile, "タイムライン", content);
+}
+async function showFriendSection(friendUid, profile, section, container) {
+  container.replaceChildren();
+  const heading = document.createElement("h3");
+  heading.textContent = section;
+  container.append(heading);
+  if (section === "プロフィール") {
+    const p = document.createElement("p");
+    p.textContent = profile.bio || "自己紹介はまだありません。";
+    container.append(p);
+    return;
+  }
+  if (section === "予定") {
+    container.innerHTML = '<p class="empty-state">共有予定機能は次の段階で追加します。</p>';
+    return;
+  }
+  const path = section === "記録" ? "studyRecords" : "studyRecords";
+  const q = query(collection(db, "users", friendUid, path), orderBy("createdAt", "desc"), limit(30));
+  const snap = await getDocs(q);
+  if (snap.empty) {
+    container.innerHTML = '<p class="empty-state">まだ勉強報告がありません。</p>';
+    return;
+  }
+  snap.forEach(d => {
+    const data = d.data();
+    const card = document.createElement("article");
+    card.className = "timeline-card";
+    const strong = document.createElement("strong");
+    strong.textContent = `${profile.displayName}：${data.subject}を${data.minutes}分勉強`;
+    const p = document.createElement("p");
+    p.textContent = data.comment || "勉強を頑張りました！";
+    const small = document.createElement("small");
+    small.textContent = relativeTime(data.createdAt);
+    card.append(strong,p,small);
+    container.append(card);
+  });
+}
+document.getElementById("backToFriendsButton").addEventListener("click", () => {
+  profilePanel.hidden = true;
+  document.getElementById("friendsPanel").hidden = false;
+  document.getElementById("socialTitle").textContent = "友達";
+});
+
+async function loadFriendsTimeline() {
+  const user = auth.currentUser;
+  if (!user) return;
+  timelineListEl.replaceChildren();
+  const friendships = await getDocs(query(collection(db, "friendships"), where("members", "array-contains", user.uid), where("status", "==", "accepted")));
+  for (const friendship of friendships.docs) {
+    const friendUid = friendship.data().members.find(uid => uid !== user.uid);
+    const profileSnap = await getDoc(doc(db, "users", friendUid));
+    if (!profileSnap.exists()) continue;
+    const profile = profileSnap.data();
+    const records = await getDocs(query(collection(db, "users", friendUid, "studyRecords"), orderBy("createdAt", "desc"), limit(20)));
+    records.forEach(record => {
+      const d = record.data();
+      const card = document.createElement("article");
+      card.className = "timeline-card";
+      const strong = document.createElement("strong");
+      strong.textContent = `${profile.displayName}：${d.subject}を${d.minutes}分勉強`;
+      const p = document.createElement("p");
+      p.textContent = d.comment || "勉強を頑張りました！";
+      const small = document.createElement("small");
+      small.textContent = relativeTime(d.createdAt);
+      card.append(strong,p,small);
+      timelineListEl.append(card);
+    });
+  }
+  if (!timelineListEl.children.length) timelineListEl.innerHTML = '<p class="empty-state">友達の勉強報告はまだありません。</p>';
+}
+
+document.getElementById("studyReportForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const user = auth.currentUser;
+  if (!user) return;
+  const subject = document.getElementById("reportSubject").value.trim();
+  const minutes = Number(document.getElementById("reportMinutes").value);
+  const comment = document.getElementById("reportComment").value.trim();
+  if (!subject || !Number.isInteger(minutes) || minutes < 1 || minutes > 1440) return alert("教科と勉強時間を正しく入力してください。");
+  await setDoc(doc(collection(db, "users", user.uid, "studyRecords")), {
+    subject, minutes, comment, createdAt:serverTimestamp()
+  });
+  event.target.reset();
+  alert("勉強報告を投稿しました！");
+  loadMyReports();
+  if (activeSocialPage === "friends") listenFriends(auth.currentUser);
+});
+async function loadMyReports() {
+  const user = auth.currentUser;
+  if (!user) return;
+  myReportsListEl.replaceChildren();
+  const snap = await getDocs(query(collection(db, "users", user.uid, "studyRecords"), orderBy("createdAt", "desc"), limit(30)));
+  if (snap.empty) {
+    myReportsListEl.innerHTML = '<p class="empty-state">まだ勉強報告がありません。</p>';
+    return;
+  }
+  snap.forEach(d => {
+    const data = d.data();
+    const card = document.createElement("article");
+    card.className = "timeline-card";
+    const strong = document.createElement("strong");
+    strong.textContent = `${data.subject}を${data.minutes}分勉強`;
+    const p = document.createElement("p");
+    p.textContent = data.comment || "勉強を頑張りました！";
+    const small = document.createElement("small");
+    small.textContent = relativeTime(data.createdAt);
+    card.append(strong,p,small);
+    myReportsListEl.append(card);
+  });
+}
+
+// ログイン後にプロフィールと友達情報を準備
+const originalShowAppScreen = showAppScreen;
+showAppScreen = function(user) {
+  originalShowAppScreen(user);
+  showSocialPage("friends");
+  ensureUserProfile(user).then(() => listenFriends(user)).catch(error => {
+    console.error("プロフィール準備エラー:", error);
+    alert("プロフィールの準備に失敗しました。Firestoreのルールを確認してください。");
+  });
+};
