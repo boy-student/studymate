@@ -1,29 +1,351 @@
 
-/* 全体の基本設定 */
+/* ===================================
+   Study Mate CSS
+   Responsive Design
+=================================== */
+
+/* 基本設定 */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+:root {
+  --purple: #8060d5;
+  --purple-dark: #6949bd;
+  --purple-light: #b7a1f3;
+  --purple-pale: #f3efff;
+  --text: #28283d;
+  --muted: #858399;
+  --white: #ffffff;
+}
+
+html {
+  min-height: 100%;
+}
+
 body {
-  font-family: "Helvetica Neue", Arial, sans-serif;
-  background: #f8f7fc;
-  color: #333;
+  min-height: 100vh;
+  font-family:
+    "Helvetica Neue",
+    Arial,
+    "Noto Sans JP",
+    sans-serif;
+  background: #faf9ff;
+  color: var(--text);
   line-height: 1.6;
 }
 
+/* hidden属性を必ず優先 */
+[hidden] {
+  display: none !important;
+}
+
+
+/* ===================================
+   ログイン画面
+=================================== */
+
+.auth-screen {
+  min-height: 100vh;
+  min-height: 100svh;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 45px 24px;
+  position: relative;
+  overflow: hidden;
+
+  background:
+    radial-gradient(
+      circle at 0% 0%,
+      rgba(190, 168, 255, 0.22),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 100% 100%,
+      rgba(190, 168, 255, 0.18),
+      transparent 30%
+    ),
+    #ffffff;
+}
+
+/* 背景の装飾 */
+.auth-screen::before {
+  content: "";
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: rgba(179, 155, 245, 0.10);
+  top: -260px;
+  left: -200px;
+  pointer-events: none;
+}
+
+.auth-screen::after {
+  content: "";
+  position: absolute;
+  width: 380px;
+  height: 380px;
+  border-radius: 50%;
+  background: rgba(179, 155, 245, 0.10);
+  bottom: -260px;
+  right: -180px;
+  pointer-events: none;
+}
+
+/* ログインコンテンツ */
+.auth-container {
+  width: 100%;
+  max-width: 470px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+  padding: 30px 20px;
+}
+
+
+/* ===================================
+   アプリロゴ
+=================================== */
+
+.app-logo {
+  width: 155px;
+  height: 155px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  border-radius: 38px;
+
+  background: linear-gradient(
+    145deg,
+    #b9a4fa,
+    #8060d5
+  );
+
+  box-shadow:
+    0 15px 35px rgba(128, 96, 213, 0.24),
+    inset 0 2px 3px rgba(255,255,255,0.35);
+
+  margin-bottom: 25px;
+}
+
+.app-logo svg {
+  width: 105px;
+  height: 105px;
+}
+
+
+/* ===================================
+   アプリ名
+=================================== */
+
+.auth-title {
+  font-size: clamp(37px, 6vw, 55px);
+  font-weight: 800;
+  letter-spacing: -2px;
+  color: #29283d;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.auth-title span {
+  color: var(--purple);
+}
+
+.auth-description {
+  color: var(--muted);
+  font-size: 15px;
+  margin-top: 12px;
+  text-align: center;
+}
+
+.auth-message {
+  margin-top: 30px;
+  margin-bottom: 17px;
+  font-size: 14px;
+  color: var(--purple-dark);
+  text-align: center;
+}
+
+
+/* ===================================
+   ログインフォーム
+=================================== */
+
+.auth-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-form input {
+  width: 100%;
+  height: 56px;
+  padding: 0 19px;
+  border: 1px solid #e5def5;
+  border-radius: 14px;
+  background: #fcfbff;
+  font-size: 15px;
+  color: var(--text);
+  transition: 0.2s;
+}
+
+.auth-form input:focus {
+  outline: none;
+  border-color: var(--purple);
+  box-shadow: 0 0 0 4px rgba(128, 96, 213, 0.10);
+}
+
+.auth-form input::placeholder {
+  color: #aaa5b9;
+}
+
+
+/* ===================================
+   ボタン共通
+=================================== */
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  transition:
+    background 0.2s,
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+
+button:focus-visible {
+  outline: 3px solid rgba(128, 96, 213, 0.4);
+  outline-offset: 3px;
+}
+
+
+/* ログインボタン */
+
+.login-button {
+  width: 100%;
+  min-height: 68px;
+
+  background: white;
+  border: 2px solid var(--purple);
+  border-radius: 35px;
+
+  color: var(--purple);
+  font-size: 19px;
+  font-weight: bold;
+  letter-spacing: 2px;
+
+  margin-top: 12px;
+}
+
+.login-button:hover {
+  background: var(--purple-pale);
+  transform: translateY(-2px);
+}
+
+
+/* 新規登録ボタン */
+
+.signup-button {
+  width: 100%;
+  min-height: 70px;
+
+  background: linear-gradient(
+    110deg,
+    #8060d5,
+    #9274e4
+  );
+
+  border-radius: 35px;
+
+  color: white;
+  font-size: 20px;
+  font-weight: bold;
+  letter-spacing: 2px;
+
+  box-shadow:
+    0 9px 20px rgba(128, 96, 213, 0.20);
+
+  margin-top: 10px;
+}
+
+.signup-button:hover {
+  background: var(--purple-dark);
+  transform: translateY(-2px);
+  box-shadow:
+    0 12px 25px rgba(128, 96, 213, 0.28);
+}
+
+
+/* Googleログイン */
+
+.google-button {
+  width: 100%;
+  min-height: 55px;
+  margin-top: 20px;
+
+  background: white;
+  color: #555;
+  border: 1px solid #e5e2ed;
+  border-radius: 30px;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.google-button:hover {
+  background: #f8f7fc;
+}
+
+.google-icon {
+  font-size: 21px;
+  font-weight: bold;
+  color: #4285f4;
+}
+
+
+/* ===================================
+   勉強管理画面
+=================================== */
+
+#appContent {
+  min-height: 100vh;
+  background: #f8f7fc;
+}
+
+
 /* ヘッダー */
+
 .header {
-  background: linear-gradient(135deg, #8b70d6, #b39bea);
+  background: linear-gradient(
+    135deg,
+    #8060d5,
+    #b39bea
+  );
+
   color: white;
   text-align: center;
   padding: 35px 20px;
+  position: relative;
 }
 
 .header h1 {
   font-size: 32px;
-  font-weight: bold;
+  font-weight: 800;
   letter-spacing: 1px;
 }
 
@@ -33,29 +355,53 @@ body {
   opacity: 0.9;
 }
 
-/* メインコンテンツ */
-.container {
-  max-width: 1000px;
-  margin: 35px auto;
-  padding: 0 20px;
+#appLogoutButton {
+  position: absolute;
+  right: 25px;
+  top: 25px;
+  background: rgba(255,255,255,0.2);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: 20px;
+  padding: 9px 16px;
 }
 
-/* ウェルカムエリア */
+#appLogoutButton:hover {
+  background: rgba(255,255,255,0.35);
+}
+
+
+/* メインコンテンツ */
+
+.container {
+  width: 100%;
+  max-width: 1100px;
+  margin: 35px auto;
+  padding: 0 24px;
+}
+
+
+/* ウェルカム */
+
 .welcome {
   background: white;
   padding: 30px;
-  border-radius: 18px;
+  border-radius: 20px;
   margin-bottom: 25px;
   box-shadow: 0 4px 15px rgba(100, 80, 150, 0.07);
 }
 
 .welcome h2 {
-  color: #7356bd;
+  color: var(--purple-dark);
   margin-bottom: 8px;
   font-size: 23px;
 }
 
-/* 勉強時間・達成率 */
+
+/* ===================================
+   勉強時間・達成率
+=================================== */
+
 .stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -65,86 +411,93 @@ body {
 
 .stat-card {
   background: white;
-  padding: 25px 15px;
+  padding: 27px 15px;
   text-align: center;
-  border-radius: 16px;
+  border-radius: 18px;
   box-shadow: 0 4px 15px rgba(100, 80, 150, 0.06);
 }
 
 .stat-card h3 {
-  color: #777;
+  color: #858399;
   font-size: 14px;
   margin-bottom: 12px;
 }
 
 .stat-card p {
-  color: #8064ca;
-  font-size: 27px;
+  color: var(--purple);
+  font-size: 29px;
   font-weight: bold;
 }
 
-/* タスク追加エリア */
+
+/* ===================================
+   タスク管理
+=================================== */
+
 .task-section,
 .task-list-section {
   background: white;
-  padding: 28px;
-  border-radius: 18px;
+  padding: 30px;
+  border-radius: 20px;
   margin-bottom: 25px;
   box-shadow: 0 4px 15px rgba(100, 80, 150, 0.06);
 }
 
 .task-section h2,
 .task-list-section h2 {
-  color: #7356bd;
+  color: var(--purple-dark);
   font-size: 21px;
   margin-bottom: 20px;
 }
 
-/* 入力フォーム */
+
+/* タスク入力フォーム */
+
 #taskForm {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr 1fr;
   gap: 12px;
 }
 
-input,
-select {
+#taskForm input,
+#taskForm select {
   width: 100%;
-  padding: 12px;
+  min-width: 0;
+  height: 46px;
+  padding: 10px 12px;
   border: 1px solid #e2dcef;
-  border-radius: 9px;
+  border-radius: 10px;
   font-size: 14px;
   background: #fdfcff;
   color: #333;
-  min-width: 0;
 }
 
-input:focus,
-select:focus {
+#taskForm input:focus,
+#taskForm select:focus {
   outline: none;
-  border-color: #9679dc;
+  border-color: var(--purple);
   box-shadow: 0 0 0 3px rgba(150, 121, 220, 0.12);
 }
 
-/* ボタン */
-button {
-  border: none;
-  border-radius: 9px;
-  padding: 12px 18px;
-  background: #8b70d6;
+#taskForm button {
+  grid-column: 1 / -1;
+  background: var(--purple);
   color: white;
-  font-size: 14px;
+  border-radius: 12px;
+  padding: 13px;
+  font-size: 15px;
   font-weight: bold;
-  cursor: pointer;
-  transition: 0.2s;
 }
 
-button:hover {
-  background: #7356bd;
-  transform: translateY(-2px);
+#taskForm button:hover {
+  background: var(--purple-dark);
 }
 
-/* フィルター */
+
+/* ===================================
+   フィルター
+=================================== */
+
 .filters {
   display: flex;
   flex-wrap: wrap;
@@ -154,14 +507,21 @@ button:hover {
 
 .filters button {
   background: #eee9fa;
-  color: #7356bd;
+  color: var(--purple-dark);
+  border-radius: 22px;
+  padding: 10px 19px;
 }
 
 .filters button:hover {
   background: #dcd1f5;
+  transform: translateY(-1px);
 }
 
-/* タスクリスト */
+
+/* ===================================
+   タスクリスト
+=================================== */
+
 #taskList {
   display: grid;
   gap: 12px;
@@ -170,12 +530,13 @@ button:hover {
 .task-item {
   background: #faf9fd;
   border: 1px solid #eee9f7;
-  border-radius: 12px;
-  padding: 17px;
+  border-radius: 14px;
+  padding: 18px;
+
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .task-item.completed {
@@ -189,6 +550,7 @@ button:hover {
 .task-item h3 {
   color: #55447f;
   font-size: 16px;
+  overflow-wrap: anywhere;
 }
 
 .task-item p {
@@ -198,17 +560,29 @@ button:hover {
 }
 
 .task-item input[type="checkbox"] {
-  width: auto;
-  accent-color: #8b70d6;
+  width: 20px;
+  height: 20px;
+  accent-color: var(--purple);
+  flex-shrink: 0;
 }
 
 .task-item button {
   background: #e9e2f8;
-  color: #7356bd;
-  padding: 8px 12px;
+  color: var(--purple-dark);
+  padding: 8px 13px;
+  border-radius: 9px;
+  flex-shrink: 0;
 }
 
-/* フッター */
+.task-item button:hover {
+  background: #dcd1f5;
+}
+
+
+/* ===================================
+   フッター
+=================================== */
+
 footer {
   text-align: center;
   padding: 25px;
@@ -216,8 +590,97 @@ footer {
   font-size: 13px;
 }
 
-/* スマホ対応 */
+
+/* ===================================
+   タブレット対応
+=================================== */
+
+@media (min-width: 701px) and (max-width: 1000px) {
+
+  .auth-container {
+    max-width: 450px;
+  }
+
+  .app-logo {
+    width: 140px;
+    height: 140px;
+  }
+
+  .container {
+    padding: 0 28px;
+  }
+
+  #taskForm {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  #taskForm button {
+    grid-column: 1 / -1;
+  }
+
+}
+
+
+/* ===================================
+   スマホ対応
+=================================== */
+
 @media (max-width: 700px) {
+
+  .auth-screen {
+    padding: 25px 22px;
+  }
+
+  .auth-container {
+    max-width: 420px;
+    padding: 20px 8px;
+  }
+
+  .app-logo {
+    width: 125px;
+    height: 125px;
+    border-radius: 32px;
+    margin-bottom: 22px;
+  }
+
+  .app-logo svg {
+    width: 85px;
+    height: 85px;
+  }
+
+  .auth-title {
+    font-size: 39px;
+  }
+
+  .auth-description {
+    font-size: 13px;
+  }
+
+  .auth-message {
+    margin-top: 25px;
+  }
+
+  .login-button {
+    min-height: 60px;
+    font-size: 17px;
+  }
+
+  .signup-button {
+    min-height: 62px;
+    font-size: 18px;
+  }
+
+  .auth-form {
+    gap: 13px;
+  }
+
+  .auth-form input {
+    height: 53px;
+  }
+
+
+  /* 管理画面 */
+
   .header {
     padding: 28px 15px;
   }
@@ -226,9 +689,22 @@ footer {
     font-size: 27px;
   }
 
+  #appLogoutButton {
+    position: static;
+    margin-top: 15px;
+  }
+
   .container {
     margin: 20px auto;
     padding: 0 14px;
+  }
+
+  .welcome {
+    padding: 23px;
+  }
+
+  .welcome h2 {
+    font-size: 19px;
   }
 
   .stats {
@@ -237,11 +713,15 @@ footer {
   }
 
   .stat-card {
-    padding: 18px;
+    padding: 20px;
   }
 
   #taskForm {
     grid-template-columns: 1fr;
+  }
+
+  #taskForm button {
+    grid-column: auto;
   }
 
   .task-section,
@@ -250,7 +730,46 @@ footer {
   }
 
   .task-item {
-    align-items: flex-start;
+    align-items: center;
     flex-wrap: wrap;
   }
+
+}
+
+
+/* ===================================
+   小さいスマホ対応
+=================================== */
+
+@media (max-width: 380px) {
+
+  .auth-title {
+    font-size: 34px;
+  }
+
+  .app-logo {
+    width: 110px;
+    height: 110px;
+  }
+
+  .app-logo svg {
+    width: 75px;
+    height: 75px;
+  }
+
+  .login-button,
+  .signup-button {
+    min-height: 55px;
+    font-size: 16px;
+  }
+
+  .task-section,
+  .task-list-section {
+    padding: 16px;
+  }
+
+  .filters button {
+    padding: 9px 13px;
+  }
+
 }
