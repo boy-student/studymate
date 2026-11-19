@@ -104,93 +104,48 @@
       </button>
     </header>
 
-    <main class="container">
-
+    <main class="container" id="homePanel">
       <section class="welcome">
         <h2>今日も勉強を頑張ろう！</h2>
-        <p>目標を決めて、一歩ずつ進んでいこう。</p>
+        <p>勉強した時間を記録して、少しずつ積み重ねよう。</p>
       </section>
 
-      <!-- 勉強状況 -->
-      <section class="stats">
-
-        <div class="stat-card">
-          <h3>今日の勉強時間</h3>
-          <p id="todayMinutes">0分</p>
-        </div>
-
-        <div class="stat-card">
-          <h3>今週の勉強時間</h3>
-          <p id="weekMinutes">0分</p>
-        </div>
-
-        <div class="stat-card">
-          <h3>達成率</h3>
-          <p id="completionRate">0%</p>
-        </div>
-
-      </section>
-
-      <!-- タスク追加 -->
-      <section class="task-section">
-        <h2>勉強タスクを追加</h2>
-
-        <form id="taskForm">
-
-          <input
-            type="text"
-            id="taskTitle"
-            placeholder="勉強する内容を入力"
-            required
-          >
-
-          <select id="taskSubject" required>
-            <option value="">教科を選択</option>
-            <option value="英語">英語</option>
-            <option value="数学">数学</option>
-            <option value="国語">国語</option>
-            <option value="理科">理科</option>
-            <option value="社会">社会</option>
-            <option value="その他">その他</option>
-          </select>
-
-          <input
-            type="date"
-            id="taskDate"
-            required
-          >
-
-          <input
-            type="number"
-            id="taskDuration"
-            placeholder="勉強時間（分）"
-            min="1"
-            required
-          >
-
-          <button type="submit">タスクを追加</button>
-
+      <section class="home-study-card">
+        <h2>勉強時間を記録</h2>
+        <p class="section-description">手入力でもタイマーでも記録できます。</p>
+        <form id="studyEntryForm" class="study-entry-form">
+          <label for="entrySubject">教科</label>
+          <input id="entrySubject" type="text" list="subjectOptions" placeholder="例：数学" maxlength="30" required>
+          <datalist id="subjectOptions">
+            <option value="英語"></option><option value="数学"></option><option value="国語"></option>
+            <option value="現代文"></option><option value="古文"></option><option value="漢文"></option>
+            <option value="物理"></option><option value="化学"></option><option value="生物"></option>
+            <option value="地学"></option><option value="日本史"></option><option value="世界史"></option>
+            <option value="地理"></option><option value="政治・経済"></option><option value="情報"></option>
+          </datalist>
+          <label>勉強時間</label>
+          <div class="duration-inputs">
+            <div><input id="entryHours" type="number" min="0" max="24" value="0" inputmode="numeric" required><span>時間</span></div>
+            <div><input id="entryMinutes" type="number" min="0" max="59" value="30" inputmode="numeric" required><span>分</span></div>
+          </div>
+          <label for="entryComment">ひとこと（任意）</label>
+          <input id="entryComment" type="text" maxlength="120" placeholder="今日の勉強メモ">
+          <button type="submit" class="primary-button">勉強記録を保存</button>
         </form>
       </section>
 
-      <!-- 勉強リスト -->
-      <section class="task-list-section">
-
-        <h2>勉強リスト</h2>
-
-        <div class="filters">
-          <button type="button" data-filter="all">すべて</button>
-          <button type="button" data-filter="today">今日</button>
-          <button type="button" data-filter="upcoming">これから</button>
-          <button type="button" data-filter="completed">完了</button>
+      <section class="home-study-card timer-card">
+        <h2>勉強タイマー</h2>
+        <label for="timerSubject">教科</label>
+        <input id="timerSubject" type="text" list="subjectOptions" placeholder="例：英語" maxlength="30">
+        <div id="timerDisplay" class="timer-display" role="timer">00:00:00</div>
+        <p id="timerStatus" class="timer-status">教科を入力してスタート</p>
+        <div class="timer-buttons">
+          <button type="button" id="timerStartButton" class="primary-button">スタート</button>
+          <button type="button" id="timerPauseButton" class="secondary-button" disabled>一時停止</button>
+          <button type="button" id="timerStopButton" class="secondary-button" disabled>終了・保存</button>
         </div>
-
-        <div id="taskList">
-          <!-- JavaScriptでタスクを表示 -->
-        </div>
-
       </section>
-
     </main>
 
 
@@ -234,16 +189,44 @@
           <div id="timelineList" class="timeline-list"></div>
         </section>
 
-        <section id="recordsPanel" class="social-panel" hidden>
-          <h3>勉強を報告する</h3>
-          <form id="studyReportForm" class="report-form">
-            <input id="reportSubject" type="text" placeholder="教科（例：数学）" required>
-            <input id="reportMinutes" type="number" min="1" max="1440" placeholder="勉強時間（分）" required>
-            <input id="reportComment" type="text" maxlength="120" placeholder="ひとこと（任意）">
-            <button type="submit">勉強を報告</button>
-          </form>
-          <h3>自分の勉強報告</h3>
-          <div id="myReportsList" class="timeline-list"></div>
+        <section id="recordsPanel" class="records-panel" hidden>
+          <h2 class="records-page-title">学習記録</h2>
+          <button type="button" id="goalCard" class="weekly-goal-card" aria-label="今週の目標設定・達成状況">
+            <div class="goal-card-top"><span>今週の目標達成率</span><span id="goalCardAction" class="goal-card-action">タップして設定</span></div>
+            <div class="goal-percent-row"><strong id="goalPercent">目標未設定</strong><span id="goalLockIcon" aria-hidden="true">›</span></div>
+            <div class="goal-progress-track"><div id="goalProgressFill" class="goal-progress-fill"></div></div>
+            <div class="goal-time-row"><strong id="goalCurrentTime">0時間00分</strong><span id="goalTargetTime">目標：未設定</span></div>
+            <p id="goalMessage" class="goal-message">月曜日に今週の目標を設定できます。</p>
+          </button>
+
+          <section class="record-section">
+            <div class="record-section-heading"><h3>教科別・勉強時間の推移</h3></div>
+            <div class="chart-controls">
+              <div class="segmented-control" id="periodControls" aria-label="集計期間">
+                <button type="button" data-period="week" class="active">週</button>
+                <button type="button" data-period="month">月</button>
+                <button type="button" data-period="year">年</button>
+              </div>
+              <div class="segmented-control unit-controls" id="unitControls" aria-label="表示単位">
+                <button type="button" data-unit="hours" class="active">時間</button>
+                <button type="button" data-unit="minutes">分</button>
+              </div>
+            </div>
+            <div class="chart-period-nav">
+              <button type="button" id="previousPeriod" aria-label="前の期間">‹</button>
+              <strong id="chartPeriodLabel">今週</strong>
+              <button type="button" id="nextPeriod" aria-label="次の期間">›</button>
+            </div>
+            <div id="stackedChart" class="stacked-chart" aria-label="教科別勉強時間グラフ"></div>
+            <div id="chartLegend" class="chart-legend"></div>
+            <div id="chartDetail" class="chart-detail" aria-live="polite">棒グラフをタップすると詳細を確認できます。</div>
+          </section>
+
+          <section class="record-section subject-summary-section">
+            <h3>教科別の勉強時間</h3>
+            <p class="section-description" id="subjectSummaryPeriod">今週の教科別合計</p>
+            <div id="subjectSummary" class="subject-summary"></div>
+          </section>
         </section>
       </section>
 
