@@ -4,7 +4,7 @@
 // ===================================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, getDoc, query, where, orderBy, limit, onSnapshot, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, getDoc, query, where, orderBy, limit, onSnapshot, updateDoc, serverTimestamp, startAt, endAt } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAw08btPXXb-272OtJC1nONUGPuKdQAEMA",
@@ -335,19 +335,16 @@ $("nextPeriod").addEventListener("click",()=>{if(periodOffset<0)periodOffset++;s
 const socialArea = document.getElementById("socialArea");
 const bottomNavigation = document.getElementById("bottomNavigation");
 const friendListEl = document.getElementById("friendList");
-const incomingRequestsEl = document.getElementById("incomingRequests");
 const friendCountEl = document.getElementById("friendCount");
 const profilePanel = document.getElementById("friendProfilePanel");
 const profileContent = document.getElementById("friendProfileContent");
 const timelineListEl = document.getElementById("timelineList");
-let activeSocialPage = "friends";
-let friendUnsubscribe = null;
-let requestUnsubscribe = null;
-let friendProfilesCache = new Map();
+let activeSocialPage = "home";
+let followUnsubscribe = null;
+let currentProfile = null;
+let scanStream = null;
+let scanFrame = null;
 
-function pairId(uidA, uidB) {
-  return [uidA, uidB].sort().join("_");
-}
 function relativeTime(value) {
   if (!value) return "日時不明";
   const date = value.toDate ? value.toDate() : new Date(value);
@@ -356,265 +353,171 @@ function relativeTime(value) {
   if (minutes < 60) return `${minutes}分前`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}時間前`;
-  const days = Math.floor(hours / 24);
-  return `${days}日前`;
+  return `${Math.floor(hours / 24)}日前`;
 }
-function showSocialPage(page) {
-  activeSocialPage = page;
-  document.getElementById("homePanel").hidden = page !== "home";
-  socialArea.hidden = page === "home";
-  bottomNavigation.hidden = false;
-  document.querySelectorAll(".nav-item").forEach(button => button.classList.toggle("active", button.dataset.page === page));
-  document.getElementById("friendsPanel").hidden = page !== "friends";
-  document.getElementById("timelinePanel").hidden = page !== "timeline";
-  document.getElementById("recordsPanel").hidden = page !== "records";
-  profilePanel.hidden = true;
-  document.getElementById("groupsPanel").hidden = true;
-  document.getElementById("socialTitle").textContent = ({friends:"友達",timeline:"タイムライン",records:"記録"}[page] || "Study Mate");
-  if (page === "timeline") loadFriendsTimeline();
-  if (page === "records") renderRecordsPage();
+function followDocId(from, to) { return `${from}_${to}`; }
+async function follows(from, to) {
+  const snap = await getDoc(doc(db, "follows", followDocId(from, to)));
+  return snap.exists();
 }
-document.querySelectorAll(".nav-item").forEach(button => button.addEventListener("click", () => showSocialPage(button.dataset.page)));
-document.querySelectorAll(".social-tab").forEach(button => {
-  button.addEventListener("click", () => {
-    document.querySelectorAll(".social-tab").forEach(b => b.classList.toggle("active", b === button));
-    document.getElementById("friendsPanel").hidden = button.dataset.socialTab !== "friends";
-    document.getElementById("groupsPanel").hidden = button.dataset.socialTab !== "groups";
-  });
-});
-
+async function canViewProfile(targetUid, targetProfile) {
+  const user = auth.currentUser;
+  if (!user) return false;
+  if (user.uid === targetUid || !targetProfile.isPrivate) return true;
+  return (await follows(user.uid, targetUid)) && (await follows(targetUid, user.uid));
+}
 async function ensureUserProfile(user) {
   const ref = doc(db, "users", user.uid);
   const snap = await getDoc(ref);
-  if (snap.exists()) return snap.data();
-
-  const displayName = (user.displayName || prompt("Study Mateで表示する名前を入力してください") || "Study Mateユーザー").trim();
-  let username = (prompt("ユーザーIDを入力してください（英数字と_、3〜20文字）") || `user_${user.uid.slice(0,8)}`)
-    .trim().toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0,20);
-  if (username.length < 3) username = `user_${user.uid.slice(0,8)}`;
-  const profile = {
-    displayName: displayName.slice(0,30),
-    username,
-    photoURL: user.photoURL || "",
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  };
-  await setDoc(ref, profile);
+  let profile;
+  if (snap.exists()) {
+    profile = snap.data();
+    if (!profile.displayName) profile.displayName = user.displayName || "Study Mateユーザー";
+    if (typeof profile.bio !== "string") profile.bio = "";
+    if (typeof profile.isPrivate !== "boolean") profile.isPrivate = false;
+    await setDoc(ref, {displayName:profile.displayName, bio:profile.bio, photoURL:profile.photoURL || user.photoURL || "", isPrivate:profile.isPrivate, updatedAt:serverTimestamp()}, {merge:true});
+  } else {
+    const displayName = (user.displayName || prompt("Study Mateで表示する名前を入力してください") || "Study Mateユーザー").trim().slice(0,30);
+    profile = {displayName, bio:"", photoURL:user.photoURL || "", isPrivate:false, createdAt:serverTimestamp(), updatedAt:serverTimestamp()};
+    await setDoc(ref, profile);
+  }
+  await setDoc(doc(db,"profileDirectory",user.uid), {displayName:profile.displayName, photoURL:profile.photoURL || "", isPrivate:!!profile.isPrivate, updatedAt:serverTimestamp()}, {merge:true});
   return profile;
 }
-
-function renderFriendRow(profile, activity, onOpen) {
-  const row = document.createElement("div");
-  row.className = "friend-row";
-  const avatar = document.createElement("div");
-  avatar.className = "friend-avatar";
-  avatar.textContent = (profile.displayName || "?").slice(0,1);
-  const main = document.createElement("div");
-  main.className = "friend-main";
-  const name = document.createElement("strong");
-  name.textContent = profile.displayName || "名前未設定";
-  const detail = document.createElement("p");
-  detail.textContent = activity ? `${activity.subject}を${activity.minutes}分勉強した${activity.comment ? "・" + activity.comment : ""}` : "まだ勉強報告がありません";
-  main.append(name, detail);
-  const time = document.createElement("span");
-  time.className = "friend-time";
-  time.textContent = activity ? relativeTime(activity.createdAt) : "";
-  const open = document.createElement("button");
-  open.className = "friend-open";
-  open.type = "button";
-  open.textContent = "見る";
-  open.addEventListener("click", onOpen);
-  row.append(avatar, main, time, open);
-  return row;
-}
-
-function listenFriends(user) {
-  if (friendUnsubscribe) friendUnsubscribe();
-  const q = query(collection(db, "friendships"), where("members", "array-contains", user.uid), where("status", "==", "accepted"));
-  friendUnsubscribe = onSnapshot(q, async snapshot => {
-    friendListEl.replaceChildren();
-    friendProfilesCache.clear();
-    const docs = snapshot.docs;
-    friendCountEl.textContent = `友達 ${docs.length}人`;
-    if (!docs.length) {
-      friendListEl.innerHTML = '<p class="empty-state">まだ友達がいません。「友達を検索」から追加してみよう！</p>';
-      return;
-    }
-    for (const friendship of docs) {
-      const data = friendship.data();
-      const friendUid = data.members.find(uid => uid !== user.uid);
-      if (!friendUid) continue;
-      const userSnap = await getDoc(doc(db, "users", friendUid));
-      if (!userSnap.exists()) continue;
-      const profile = userSnap.data();
-      friendProfilesCache.set(friendUid, profile);
-      const records = await getDocs(query(collection(db, "users", friendUid, "studyRecords"), orderBy("createdAt", "desc"), limit(1)));
-      const activity = records.empty ? null : {id:records.docs[0].id, ...records.docs[0].data()};
-      friendListEl.appendChild(renderFriendRow(profile, activity, () => openFriendProfile(friendUid, profile)));
-    }
-  }, error => {
-    console.error(error);
-    friendListEl.textContent = "友達を読み込めませんでした。Firestoreルールを確認してください。";
-  });
-
-  if (requestUnsubscribe) requestUnsubscribe();
-  const rq = query(collection(db, "friendships"), where("members", "array-contains", user.uid), where("status", "==", "pending"));
-  requestUnsubscribe = onSnapshot(rq, async snapshot => {
-    incomingRequestsEl.replaceChildren();
-    if (snapshot.empty) {
-      incomingRequestsEl.innerHTML = '<p class="empty-state">新しい申請はありません。</p>';
-      return;
-    }
-    for (const requestDoc of snapshot.docs) {
-      const data = requestDoc.data();
-      if (data.recipientUid !== user.uid) continue;
-      const senderSnap = await getDoc(doc(db, "users", data.requesterUid));
-      const sender = senderSnap.exists() ? senderSnap.data() : {displayName:"ユーザー"};
-      const row = document.createElement("div");
-      row.className = "friend-row";
-      const main = document.createElement("div");
-      main.className = "friend-main";
-      const title = document.createElement("strong");
-      title.textContent = `${sender.displayName}さんから友達申請`;
-      const actions = document.createElement("div");
-      actions.className = "request-actions";
-      const accept = document.createElement("button");
-      accept.className = "accept";
-      accept.textContent = "承認";
-      accept.onclick = async () => updateDoc(requestDoc.ref, {status:"accepted", acceptedAt:serverTimestamp()});
-      const reject = document.createElement("button");
-      reject.textContent = "拒否";
-      reject.onclick = async () => deleteDoc(requestDoc.ref);
-      actions.append(accept, reject);
-      main.append(title, actions);
-      row.append(main);
-      incomingRequestsEl.append(row);
-    }
-  });
-}
-
-async function searchAndRequestFriend() {
-  const user = auth.currentUser;
-  if (!user) return;
-  const username = (prompt("追加したい相手のユーザーIDを入力してください") || "").trim().toLowerCase();
-  if (!username) return;
-  const found = await getDocs(query(collection(db, "users"), where("username", "==", username), limit(2)));
-  if (found.empty) return alert("そのユーザーIDは見つかりませんでした。");
-  const target = found.docs[0];
-  if (target.id === user.uid) return alert("自分自身には申請できません。");
-  const friendshipRef = doc(db, "friendships", pairId(user.uid, target.id));
-  const existing = await getDoc(friendshipRef);
-  if (existing.exists()) return alert("申請済み、または既に友達です。");
-  await setDoc(friendshipRef, {
-    members:[user.uid, target.id],
-    requesterUid:user.uid,
-    recipientUid:target.id,
-    status:"pending",
-    createdAt:serverTimestamp()
-  });
-  alert("友達申請を送信しました！");
-}
-document.getElementById("searchFriendButton").addEventListener("click", searchAndRequestFriend);
-document.getElementById("addFriendButton").addEventListener("click", searchAndRequestFriend);
-
-async function openFriendProfile(friendUid, profile) {
-  document.getElementById("friendsPanel").hidden = true;
-  profilePanel.hidden = false;
-  document.getElementById("socialTitle").textContent = profile.displayName || "友達プロフィール";
-  profileContent.replaceChildren();
-  const heading = document.createElement("div");
-  heading.className = "profile-heading";
-  const avatar = document.createElement("div");
-  avatar.className = "friend-avatar";
-  avatar.textContent = (profile.displayName || "?").slice(0,1);
-  const nameBlock = document.createElement("div");
-  const name = document.createElement("h2");
-  name.textContent = profile.displayName || "名前未設定";
-  const about = document.createElement("p");
-  about.textContent = profile.bio || "プロフィール";
-  nameBlock.append(name, about);
-  heading.append(avatar, nameBlock);
-  profileContent.append(heading);
-
-  const tabs = document.createElement("div");
-  tabs.className = "profile-subtabs";
-  ["記録","タイムライン","プロフィール"].forEach(label => {
-    const b = document.createElement("button");
-    b.textContent = label;
-    b.onclick = () => showFriendSection(friendUid, profile, label, content);
-    tabs.append(b);
-  });
-  const content = document.createElement("div");
-  profileContent.append(tabs, content);
-  await showFriendSection(friendUid, profile, "タイムライン", content);
-}
-async function showFriendSection(friendUid, profile, section, container) {
-  container.replaceChildren();
-  const heading = document.createElement("h3");
-  heading.textContent = section;
-  container.append(heading);
-  if (section === "プロフィール") {
-    const p = document.createElement("p");
-    p.textContent = profile.bio || "自己紹介はまだありません。";
-    container.append(p);
-    return;
-  }
-  const path = section === "記録" ? "studyRecords" : "studyRecords";
-  const q = query(collection(db, "users", friendUid, path), orderBy("createdAt", "desc"), limit(30));
-  const snap = await getDocs(q);
-  if (snap.empty) {
-    container.innerHTML = '<p class="empty-state">まだ勉強報告がありません。</p>';
-    return;
-  }
-  snap.forEach(d => {
-    const data = d.data();
-    const card = document.createElement("article");
-    card.className = "timeline-card";
-    const strong = document.createElement("strong");
-    strong.textContent = `${profile.displayName}：${data.subject}を${data.minutes}分勉強`;
-    const p = document.createElement("p");
-    p.textContent = data.comment || "勉強を頑張りました！";
-    const small = document.createElement("small");
-    small.textContent = relativeTime(data.createdAt);
-    card.append(strong,p,small);
-    container.append(card);
-  });
-}
-document.getElementById("backToFriendsButton").addEventListener("click", () => {
+function showSocialPage(page) {
+  activeSocialPage = page;
+  $("homePanel").hidden = page !== "home";
+  socialArea.hidden = page === "home";
+  bottomNavigation.hidden = false;
+  document.querySelectorAll(".nav-item").forEach(button => button.classList.toggle("active", button.dataset.page === page));
+  $("friendsPanel").hidden = page !== "friends";
+  $("timelinePanel").hidden = page !== "timeline";
+  $("recordsPanel").hidden = page !== "records";
   profilePanel.hidden = true;
-  document.getElementById("friendsPanel").hidden = false;
-  document.getElementById("socialTitle").textContent = "友達";
-});
+  $("socialTitle").textContent = ({friends:"フォロー",timeline:"タイムライン",records:"記録"}[page] || "Study Mate");
+  if (page === "timeline") loadFriendsTimeline();
+  if (page === "records") renderRecordsPage();
+  if (page === "friends") loadFollowingList();
+}
+document.querySelectorAll(".nav-item").forEach(button => button.addEventListener("click", () => showSocialPage(button.dataset.page)));
 
-async function loadFriendsTimeline() {
-  const user = auth.currentUser;
-  if (!user) return;
-  timelineListEl.replaceChildren();
-  const friendships = await getDocs(query(collection(db, "friendships"), where("members", "array-contains", user.uid), where("status", "==", "accepted")));
-  for (const friendship of friendships.docs) {
-    const friendUid = friendship.data().members.find(uid => uid !== user.uid);
-    const profileSnap = await getDoc(doc(db, "users", friendUid));
-    if (!profileSnap.exists()) continue;
-    const profile = profileSnap.data();
-    const records = await getDocs(query(collection(db, "users", friendUid, "studyRecords"), orderBy("createdAt", "desc"), limit(20)));
-    records.forEach(record => {
-      const d = record.data();
-      const card = document.createElement("article");
-      card.className = "timeline-card";
-      const strong = document.createElement("strong");
-      strong.textContent = `${profile.displayName}：${d.subject}を${d.minutes}分勉強`;
-      const p = document.createElement("p");
-      p.textContent = d.comment || "勉強を頑張りました！";
-      const small = document.createElement("small");
-      small.textContent = relativeTime(d.createdAt);
-      card.append(strong,p,small);
-      timelineListEl.append(card);
-    });
-  }
-  if (!timelineListEl.children.length) timelineListEl.innerHTML = '<p class="empty-state">友達の勉強報告はまだありません。</p>';
+function makeAvatar(profile, className="friend-avatar") {
+  const avatar = document.createElement("div"); avatar.className = className;
+  if (profile.photoURL) { const img=document.createElement("img"); img.src=profile.photoURL; img.alt=""; img.referrerPolicy="no-referrer"; avatar.append(img); }
+  else avatar.textContent=(profile.displayName || "?").slice(0,1);
+  return avatar;
+}
+function makeFollowButton(uid, isFollowing, isPrivate) {
+  const button=document.createElement("button"); button.type="button"; button.className=isFollowing?"secondary-button":"primary-button";
+  button.textContent=isFollowing?"フォロー中":"フォロー";
+  button.addEventListener("click",async()=>{
+    const me=auth.currentUser; if(!me)return;
+    button.disabled=true;
+    try {
+      const ref=doc(db,"follows",followDocId(me.uid,uid));
+      if(await follows(me.uid,uid)){ await deleteDoc(ref); button.textContent="フォロー"; button.className="primary-button"; }
+      else { await setDoc(ref,{followerUid:me.uid,targetUid:uid,createdAt:serverTimestamp()}); button.textContent="フォロー中"; button.className="secondary-button"; }
+      button.disabled=false;
+      if(currentProfile?.uid===uid) openUserProfile(uid);
+      if(activeSocialPage==="friends") loadFollowingList();
+    } catch(e){ console.error(e); alert("フォロー状態を変更できませんでした。Firestoreルールを確認してください。"); button.disabled=false; }
+  });
+  return button;
+}
+async function loadFollowingList() {
+  const user=auth.currentUser; if(!user)return;
+  friendListEl.replaceChildren();
+  try {
+    const snap=await getDocs(query(collection(db,"follows"),where("followerUid","==",user.uid)));
+    friendCountEl.textContent=`フォロー中 ${snap.size}人`;
+    if(snap.empty){friendListEl.innerHTML='<p class="empty-state">まだフォローしていません。「名前で検索」またはQRコードから追加できます。</p>';return;}
+    for(const f of snap.docs){
+      const uid=f.data().targetUid; const ps=await getDoc(doc(db,"profileDirectory",uid)); if(!ps.exists())continue;
+      const p=ps.data(); const row=document.createElement("div"); row.className="friend-row";
+      const main=document.createElement("div");main.className="friend-main";const name=document.createElement("strong");name.textContent=p.displayName||"名前未設定";const detail=document.createElement("p");detail.textContent=p.isPrivate?"非公開アカウント":"公開アカウント";main.append(name,detail);
+      const open=document.createElement("button");open.className="friend-open";open.textContent="プロフィール";open.onclick=()=>openUserProfile(uid);
+      row.append(makeAvatar(p),main,open);friendListEl.append(row);
+    }
+  }catch(e){console.error(e);friendListEl.textContent="フォロー一覧を読み込めませんでした。";}
+}
+function openSearchModal(){ $("searchModal").hidden=false; $("userSearchInput").focus(); }
+$("searchFriendButton").addEventListener("click",openSearchModal);
+$("addFriendButton").addEventListener("click",()=>openQrModal(false));
+$("closeSearchModal").addEventListener("click",()=>$("searchModal").hidden=true);
+$("runUserSearch").addEventListener("click",searchUsers);
+$("userSearchInput").addEventListener("keydown",e=>{if(e.key==="Enter")searchUsers();});
+async function searchUsers(){
+  const term=$("userSearchInput").value.trim();const results=$("userSearchResults");results.replaceChildren();
+  if(!term)return alert("名前を入力してください。");
+  try{
+    const snap=await getDocs(query(collection(db,"profileDirectory"),orderBy("displayName"),startAt(term),endAt(term+"\uf8ff"),limit(25)));
+    const hits=snap.docs.filter(d=>d.id!==auth.currentUser.uid);
+    if(!hits.length){results.innerHTML='<p class="empty-state">該当するユーザーが見つかりませんでした。</p>';return;}
+    for(const d of hits){const p=d.data();const row=document.createElement("div");row.className="friend-row search-result-row";const main=document.createElement("div");main.className="friend-main";const name=document.createElement("strong");name.textContent=p.displayName||"名前未設定";const privacy=document.createElement("p");privacy.textContent=p.isPrivate?"非公開アカウント":"公開アカウント";main.append(name,privacy);const open=document.createElement("button");open.className="friend-open";open.textContent="見る";open.onclick=()=>{$("searchModal").hidden=true;openUserProfile(d.id);};row.append(makeAvatar(p),main,open);results.append(row);}
+  }catch(e){console.error(e);results.textContent="検索に失敗しました。Firestoreルールとインデックスを確認してください。";}
+}
+async function openUserProfile(uid){
+  const me=auth.currentUser;if(!me)return;
+  try{
+    const directorySnap=await getDoc(doc(db,"profileDirectory",uid));if(!directorySnap.exists())return alert("プロフィールが見つかりません。");
+    const directory=directorySnap.data();const allowed=uid===me.uid || !directory.isPrivate || ((await follows(me.uid,uid))&&(await follows(uid,me.uid)));
+    const fullSnap=allowed?await getDoc(doc(db,"users",uid)):null;
+    const profile=fullSnap?.exists()?fullSnap.data():{displayName:directory.displayName,photoURL:directory.photoURL,isPrivate:directory.isPrivate,bio:""};
+    currentProfile={uid,...profile};
+    $("friendsPanel").hidden=true;$("timelinePanel").hidden=true;$("recordsPanel").hidden=true;profilePanel.hidden=false;
+    $("socialTitle").textContent=profile.displayName||"プロフィール";profileContent.replaceChildren();
+    const head=document.createElement("div");head.className="profile-heading";head.append(makeAvatar(profile));
+    const info=document.createElement("div");info.className="profile-heading-info";const name=document.createElement("h2");name.textContent=profile.displayName||"名前未設定";const counts=document.createElement("p");counts.className="profile-counts";
+    const [followers,following]=await Promise.all([getDocs(query(collection(db,"follows"),where("targetUid","==",uid))),getDocs(query(collection(db,"follows"),where("followerUid","==",uid)))]);
+    counts.textContent=`フォロワー ${followers.size}人　フォロー中 ${following.size}人`;info.append(name,counts);
+    const isFollowing=await follows(me.uid,uid);if(uid!==me.uid)info.append(makeFollowButton(uid,isFollowing,profile.isPrivate));
+    head.append(info);profileContent.append(head);
+    const tabs=document.createElement("div");tabs.className="profile-subtabs";const content=document.createElement("div");
+    ["記録","タイムライン","プロフィール"].forEach(label=>{const b=document.createElement("button");b.textContent=label;b.onclick=()=>{tabs.querySelectorAll("button").forEach(x=>x.classList.toggle("active",x===b));showFriendSection(uid,profile,label,content,allowed);};tabs.append(b);});
+    profileContent.append(tabs,content);
+    if(!allowed){content.innerHTML='<p class="empty-state">このアカウントは非公開です。勉強記録とプロフィールを見るには相互フォローが必要です。</p>';return;}
+    tabs.querySelector("button").classList.add("active");await showFriendSection(uid,profile,"記録",content,true);
+  }catch(e){console.error(e);alert("プロフィールを開けませんでした。公開範囲またはFirestoreルールを確認してください。");}
+}
+async function showFriendSection(uid,profile,section,container,allowed){
+  container.replaceChildren();if(!allowed){container.textContent="相互フォローすると閲覧できます。";return;}
+  if(section==="プロフィール"){const p=document.createElement("p");p.textContent=profile.bio||"自己紹介はまだありません。";container.append(p);return;}
+  const snap=await getDocs(query(collection(db,"users",uid,"studyRecords"),orderBy("createdAt","desc"),limit(50)));
+  if(snap.empty){container.innerHTML='<p class="empty-state">まだ勉強記録がありません。</p>';return;}
+  snap.forEach(d=>{const data=d.data();const card=document.createElement("article");card.className="timeline-card";const strong=document.createElement("strong");strong.textContent=`${profile.displayName}：${data.subject}を${data.minutes}分勉強`;const p=document.createElement("p");p.textContent=data.comment||"勉強を頑張りました！";const small=document.createElement("small");small.textContent=relativeTime(data.createdAt);card.append(strong,p,small);container.append(card);});
+}
+$("backToFriendsButton").addEventListener("click",()=>{profilePanel.hidden=true;$("friendsPanel").hidden=false;$("socialTitle").textContent="フォロー";loadFollowingList();});
+async function loadFriendsTimeline(){
+  const user=auth.currentUser;if(!user)return;timelineListEl.replaceChildren();
+  try{const snap=await getDocs(query(collection(db,"follows"),where("followerUid","==",user.uid)));
+    for(const f of snap.docs){const uid=f.data().targetUid;const ps=await getDoc(doc(db,"profileDirectory",uid));if(!ps.exists())continue;const p=ps.data();const mutual=await follows(uid,user.uid);if(p.isPrivate&&!mutual)continue;
+      const records=await getDocs(query(collection(db,"users",uid,"studyRecords"),orderBy("createdAt","desc"),limit(20)));
+      records.forEach(r=>{const d=r.data();const card=document.createElement("article");card.className="timeline-card";const strong=document.createElement("strong");strong.textContent=`${p.displayName}：${d.subject}を${d.minutes}分勉強`;const comment=document.createElement("p");comment.textContent=d.comment||"勉強を頑張りました！";const time=document.createElement("small");time.textContent=relativeTime(d.createdAt);card.append(strong,comment,time);timelineListEl.append(card);});
+    }
+    if(!timelineListEl.children.length)timelineListEl.innerHTML='<p class="empty-state">表示できる勉強報告はまだありません。</p>';
+  }catch(e){console.error(e);timelineListEl.textContent="タイムラインを読み込めませんでした。";}
 }
 
+// 自分のプロフィール編集
+async function loadMyProfileSettings(){const u=auth.currentUser;if(!u)return;const s=await getDoc(doc(db,"users",u.uid));if(!s.exists())return;const p=s.data();$("myDisplayName").value=p.displayName||"";$("myBio").value=p.bio||"";$("privateAccountToggle").checked=!!p.isPrivate;updatePrivacyLabel();}
+function updatePrivacyLabel(){$("accountPrivacyLabel").textContent=$("privateAccountToggle").checked?"非公開アカウント":"公開アカウント";}
+$("privateAccountToggle").addEventListener("change",updatePrivacyLabel);
+$("saveProfileButton").addEventListener("click",async()=>{const u=auth.currentUser;if(!u)return;const displayName=$("myDisplayName").value.trim();if(!displayName)return alert("表示名を入力してください。");const bio=$("myBio").value.trim();const isPrivate=$("privateAccountToggle").checked;try{await updateDoc(doc(db,"users",u.uid),{displayName:displayName.slice(0,30),bio:bio.slice(0,120),isPrivate,updatedAt:serverTimestamp()});await setDoc(doc(db,"profileDirectory",u.uid),{displayName:displayName.slice(0,30),photoURL:u.photoURL||"",isPrivate,updatedAt:serverTimestamp()},{merge:true});$("profileSaveMessage").textContent="プロフィールを保存しました。";}catch(e){console.error(e);alert("保存できませんでした。Firestoreルールを確認してください。");}});
 
+// QRコード：URLにはプロフィールを開くためのUIDだけを含め、認証情報は含めない
+function profileUrl(uid){return `${location.origin}${location.pathname}?profile=${encodeURIComponent(uid)}`;}
+function stopQrCamera(){if(scanFrame)cancelAnimationFrame(scanFrame);scanFrame=null;if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null;}$("qrVideo").hidden=true;}
+function openQrModal(scan){$("qrModal").hidden=false;$("myQrCode").replaceChildren();$("qrVideo").hidden=true;$("qrScanMessage").textContent="";$("startQrScanButton").hidden=!scan;$("qrModalTitle").textContent=scan?"QRコードを読み取る":"自分のQRコード";if(!scan){const u=auth.currentUser;const url=profileUrl(u.uid);if(window.QRCode)new QRCode($("myQrCode"),{text:url,width:220,height:220,colorDark:"#30234d",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});else $("myQrCode").textContent=url;}}
+$("showMyQrButton").addEventListener("click",()=>openQrModal(false));
+$("closeQrModal").addEventListener("click",()=>{stopQrCamera();$("qrModal").hidden=true;});
+$("startQrScanButton").addEventListener("click",async()=>{
+  if(!("BarcodeDetector" in window)){ $("qrScanMessage").textContent="このブラウザはQRカメラ読み取りに対応していません。相手のQRコードに記載されたプロフィールURLを開いてください。";return; }
+  try{const detector=new BarcodeDetector({formats:["qr_code"]});scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});const video=$("qrVideo");video.srcObject=scanStream;video.hidden=false;await video.play();$("qrScanMessage").textContent="QRコードをカメラに映してください。";
+    const scan=async()=>{if(!scanStream)return;try{const codes=await detector.detect(video);if(codes.length){const url=new URL(codes[0].rawValue);const uid=url.searchParams.get("profile");if(uid){stopQrCamera();$("qrModal").hidden=true;openUserProfile(uid);return;}}}catch(e){}scanFrame=requestAnimationFrame(scan);};scan();
+  }catch(e){console.error(e);$("qrScanMessage").textContent="カメラを起動できませんでした。ブラウザのカメラ許可を確認してください。";}
+});
+// QRのリンクからプロフィールを直接開く
+async function openProfileFromUrl(){const uid=new URLSearchParams(location.search).get("profile");if(uid){showSocialPage("friends");await openUserProfile(uid);}}
 
 // 認証状態（画面・友達機能の定義後に開始）
 onAuthStateChanged(auth, async user => {
@@ -622,16 +525,15 @@ onAuthStateChanged(auth, async user => {
     showLoginScreen();
     studyRecords = [];
     currentGoal = null;
-    if (friendUnsubscribe) friendUnsubscribe();
-    if (requestUnsubscribe) requestUnsubscribe();
     return;
   }
   showAppScreen();
   showSocialPage("home");
   try {
     await ensureUserProfile(user);
-    listenFriends(user);
-    await Promise.all([loadStudyRecords(), loadWeeklyGoal()]);
+    await Promise.all([loadStudyRecords(), loadWeeklyGoal(), loadMyProfileSettings()]);
+    if (new URLSearchParams(location.search).has("profile")) await openProfileFromUrl();
+    else loadFollowingList();
   } catch (error) {
     console.error("初期データ読み込みエラー", error);
     alert("データの読み込みに失敗しました。Firestoreルールを確認してください。");

@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#ffffff">
   <title>Study Mate | 学習管理サイト</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
 </head>
 
 <body>
@@ -110,6 +111,18 @@
         <p>勉強した時間を記録して、少しずつ積み重ねよう。</p>
       </section>
 
+      <section class="home-study-card account-settings-card">
+        <div class="account-settings-heading"><h2>プロフィール設定</h2><span id="accountPrivacyLabel">公開アカウント</span></div>
+        <label for="myDisplayName">表示名</label>
+        <input id="myDisplayName" type="text" maxlength="30" placeholder="表示名">
+        <label for="myBio">自己紹介</label>
+        <textarea id="myBio" maxlength="120" rows="3" placeholder="自分のプロフィールを紹介しよう"></textarea>
+        <label class="privacy-toggle"><input id="privateAccountToggle" type="checkbox"> 非公開アカウントにする</label>
+        <p class="section-description">公開：誰でもプロフィールと勉強記録を閲覧できます。非公開：相互フォローした相手だけがプロフィールと勉強記録を閲覧できます。</p>
+        <div class="profile-setting-actions"><button type="button" id="saveProfileButton" class="primary-button">プロフィールを保存</button><button type="button" id="showMyQrButton" class="secondary-button">自分のQRコード</button></div>
+        <p id="profileSaveMessage" class="section-description" aria-live="polite"></p>
+      </section>
+
       <section class="home-study-card">
         <h2>勉強時間を記録</h2>
         <p class="section-description">手入力でもタイマーでも記録できます。</p>
@@ -149,46 +162,27 @@
     </main>
 
 
-      <!-- 友達・タイムライン・記録画面 -->
+      <!-- フォロー・タイムライン・記録画面 -->
       <section id="socialArea" class="social-area" hidden>
         <div class="social-top">
-          <h2 id="socialTitle">友達</h2>
+          <h2 id="socialTitle">フォロー</h2>
           <div class="social-actions">
-            <button type="button" id="searchFriendButton">友達を検索</button>
-            <button type="button" id="addFriendButton">友達追加</button>
+            <button type="button" id="searchFriendButton">名前で検索</button>
+            <button type="button" id="addFriendButton">QRコードで追加</button>
           </div>
         </div>
-
-        <div class="social-tabs">
-          <button type="button" class="social-tab active" data-social-tab="friends">友達</button>
-          <button type="button" class="social-tab" data-social-tab="groups">グループ</button>
-        </div>
-
         <section id="friendsPanel" class="social-panel">
-          <h3 id="friendCount">友達</h3>
-          <div id="friendList" class="friend-list">
-            <p class="empty-state">友達を読み込んでいます...</p>
-          </div>
-          <section class="request-section">
-            <h3>届いている友達申請</h3>
-            <div id="incomingRequests" class="friend-list"></div>
-          </section>
+          <h3 id="friendCount">フォロー中</h3>
+          <div id="friendList" class="friend-list"><p class="empty-state">読み込み中...</p></div>
         </section>
-
-        <section id="groupsPanel" class="social-panel" hidden>
-          <p class="empty-state">グループ機能は次の開発ステップで追加する予定です。</p>
-        </section>
-
         <section id="friendProfilePanel" class="social-panel" hidden>
-          <button type="button" id="backToFriendsButton" class="back-button">← 友達一覧へ戻る</button>
+          <button type="button" id="backToFriendsButton" class="back-button">← フォロー一覧へ戻る</button>
           <div id="friendProfileContent"></div>
         </section>
-
         <section id="timelinePanel" class="social-panel" hidden>
-          <h3>友達のタイムライン</h3>
+          <h3>フォロー中のタイムライン</h3>
           <div id="timelineList" class="timeline-list"></div>
         </section>
-
         <section id="recordsPanel" class="records-panel" hidden>
           <h2 class="records-page-title">学習記録</h2>
           <button type="button" id="goalCard" class="weekly-goal-card" aria-label="今週の目標設定・達成状況">
@@ -198,38 +192,25 @@
             <div class="goal-time-row"><strong id="goalCurrentTime">0時間00分</strong><span id="goalTargetTime">目標：未設定</span></div>
             <p id="goalMessage" class="goal-message">月曜日に今週の目標を設定できます。</p>
           </button>
-
           <section class="record-section">
             <div class="record-section-heading"><h3>教科別・勉強時間の推移</h3></div>
             <div class="chart-controls">
-              <div class="segmented-control" id="periodControls" aria-label="集計期間">
-                <button type="button" data-period="week" class="active">週</button>
-                <button type="button" data-period="month">月</button>
-                <button type="button" data-period="year">年</button>
-              </div>
-              <div class="segmented-control unit-controls" id="unitControls" aria-label="表示単位">
-                <button type="button" data-unit="hours" class="active">時間</button>
-                <button type="button" data-unit="minutes">分</button>
-              </div>
+              <div class="segmented-control" id="periodControls" aria-label="集計期間"><button type="button" data-period="week" class="active">週</button><button type="button" data-period="month">月</button><button type="button" data-period="year">年</button></div>
+              <div class="segmented-control unit-controls" id="unitControls" aria-label="表示単位"><button type="button" data-unit="hours" class="active">時間</button><button type="button" data-unit="minutes">分</button></div>
             </div>
-            <div class="chart-period-nav">
-              <button type="button" id="previousPeriod" aria-label="前の期間">‹</button>
-              <strong id="chartPeriodLabel">今週</strong>
-              <button type="button" id="nextPeriod" aria-label="次の期間">›</button>
-            </div>
-            <div id="stackedChart" class="stacked-chart" aria-label="教科別勉強時間グラフ"></div>
-            <div id="chartLegend" class="chart-legend"></div>
-            <div id="chartDetail" class="chart-detail" aria-live="polite">棒グラフをタップすると詳細を確認できます。</div>
+            <div class="chart-period-nav"><button type="button" id="previousPeriod" aria-label="前の期間">‹</button><strong id="chartPeriodLabel">今週</strong><button type="button" id="nextPeriod" aria-label="次の期間">›</button></div>
+            <div id="stackedChart" class="stacked-chart" aria-label="教科別勉強時間グラフ"></div><div id="chartLegend" class="chart-legend"></div><div id="chartDetail" class="chart-detail" aria-live="polite">棒グラフをタップすると詳細を確認できます。</div>
           </section>
-
-          <section class="record-section subject-summary-section">
-            <h3>教科別の勉強時間</h3>
-            <p class="section-description" id="subjectSummaryPeriod">今週の教科別合計</p>
-            <div id="subjectSummary" class="subject-summary"></div>
-          </section>
+          <section class="record-section subject-summary-section"><h3>教科別の勉強時間</h3><p class="section-description" id="subjectSummaryPeriod">今週の教科別合計</p><div id="subjectSummary" class="subject-summary"></div></section>
         </section>
       </section>
 
+      <div id="searchModal" class="study-modal" hidden>
+        <div class="study-modal-card"><button type="button" class="modal-close" id="closeSearchModal">×</button><h2>ユーザーを検索</h2><p class="section-description">表示名の一部を入力して検索できます。</p><input id="userSearchInput" type="search" maxlength="30" placeholder="名前を入力"><button type="button" id="runUserSearch" class="primary-button">検索</button><div id="userSearchResults" class="friend-list"></div></div>
+      </div>
+      <div id="qrModal" class="study-modal" hidden>
+        <div class="study-modal-card"><button type="button" class="modal-close" id="closeQrModal">×</button><h2 id="qrModalTitle">QRコード</h2><div id="myQrCode" class="qr-code-area"></div><p id="qrHelpText" class="section-description">このQRコードを読み取るとプロフィールを開けます。</p><button type="button" id="startQrScanButton" class="primary-button">カメラで読み取る</button><video id="qrVideo" playsinline hidden></video><p id="qrScanMessage" class="section-description"></p></div>
+      </div>
       <nav id="bottomNavigation" class="bottom-navigation" aria-label="メインナビゲーション">
         <button type="button" class="nav-item active" data-page="friends"><span>♧</span>友達</button>
         <button type="button" class="nav-item" data-page="timeline"><span>◷</span>タイムライン</button>
