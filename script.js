@@ -26,6 +26,9 @@ const appContent = $("appContent");
 const signupForm = $("signupForm");
 const emailInput = $("email");
 const passwordInput = $("password");
+const passwordConfirmInput = $("passwordConfirm");
+const profileSetupScreen = $("profileSetupScreen");
+const profileSetupForm = $("profileSetupForm");
 const loginButton = $("loginButton");
 const googleLoginButton = $("googleLoginButton");
 const logoutButton = $("logoutButton");
@@ -35,13 +38,29 @@ const authMessage = $("authMessage");
 function showAuthMessage(message) { authMessage.textContent = message; }
 function showLoginScreen() {
   authScreen.hidden = false;
+  profileSetupScreen.hidden = true;
   appContent.hidden = true;
   signupForm.hidden = false;
   googleLoginButton.hidden = false;
   logoutButton.hidden = true;
 }
+function showProfileSetupScreen(user) {
+  authScreen.hidden = true;
+  profileSetupScreen.hidden = false;
+  appContent.hidden = true;
+  $("setupDisplayName").value = user.displayName || "";
+  $("setupBio").value = "";
+  $("setupPrivate").checked = false;
+  const avatar = $("setupAvatar");
+  avatar.replaceChildren();
+  if (user.photoURL) {
+    const img = document.createElement("img"); img.src = user.photoURL; img.alt = "プロフィール画像"; avatar.append(img);
+  } else avatar.textContent = (user.displayName || "S").slice(0, 1);
+  $("profileSetupMessage").textContent = "";
+}
 function showAppScreen() {
   authScreen.hidden = true;
+  profileSetupScreen.hidden = true;
   appContent.hidden = false;
   signupForm.hidden = true;
   googleLoginButton.hidden = true;
@@ -53,14 +72,51 @@ logoutButton.addEventListener("click", logout);
 
 signupForm.addEventListener("submit", async event => {
   event.preventDefault();
+  if (passwordInput.value !== passwordConfirmInput.value) {
+    alert("確認用パスワードが一致していません。"); return;
+  }
   try {
     showAuthMessage("アカウントを作成しています...");
     await createUserWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value);
-    showAuthMessage("新規登録が完了しました！");
+    showAuthMessage("アカウントを作成しました。プロフィールを設定してください。");
   } catch (error) {
     console.error(error); showAuthMessage("新規登録に失敗しました。"); alert("登録エラー：" + error.message);
   }
 });
+profileSetupForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const user = auth.currentUser;
+  if (!user) return;
+  const displayName = $("setupDisplayName").value.trim();
+  if (!displayName) { alert("ユーザーネームを入力してください。"); return; }
+  const bio = $("setupBio").value.trim().slice(0, 120);
+  const isPrivate = $("setupPrivate").checked;
+  const button = $("finishProfileSetupButton");
+  button.disabled = true;
+  $("profileSetupMessage").textContent = "プロフィールを保存しています...";
+  try {
+    const profile = {
+      displayName: displayName.slice(0, 30), bio,
+      photoURL: user.photoURL || "", isPrivate,
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+    };
+    await setDoc(doc(db, "users", user.uid), profile, { merge: true });
+    await setDoc(doc(db, "profileDirectory", user.uid), {
+      displayName: profile.displayName, photoURL: profile.photoURL,
+      isPrivate, updatedAt: serverTimestamp()
+    }, { merge: true });
+    showAppScreen();
+    await ensureUserProfile(user);
+    await Promise.all([loadStudyRecords(), loadWeeklyGoal(), loadMyProfileSettings()]);
+    showSocialPage("home");
+  } catch (error) {
+    console.error("プロフィール設定エラー", error);
+    $("profileSetupMessage").textContent = "保存できませんでした。通信状態とFirestoreルールを確認してください。";
+    alert("プロフィールを保存できませんでした。もう一度お試しください。");
+  } finally { button.disabled = false; }
+});
+$("setupLogoutButton").addEventListener("click", logout);
+
 loginButton.addEventListener("click", async () => {
   if (!emailInput.value.trim() || !passwordInput.value) return alert("メールアドレスとパスワードを入力してください。");
   try { showAuthMessage("ログインしています..."); await signInWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value); }
@@ -218,6 +274,12 @@ function updateGoalCard() {
   $("goalCardAction").textContent = canSet ? "タップして設定" : currentGoal ? "設定済み・変更不可" : "月曜日に設定可能";
   $("goalLockIcon").textContent = canSet ? "›" : "🔒";
   $("goalCard").setAttribute("aria-label", canSet ? "今週の目標を設定" : "今週の目標と次回設定日を確認");
+  const homeGoalValue = $("homeGoalValue");
+  const homeGoalProgress = $("homeGoalProgress");
+  if (homeGoalValue && homeGoalProgress) {
+    homeGoalValue.textContent = hasGoal ? `今週の目標：${formatDuration(target)}` : "今週の目標：未設定";
+    homeGoalProgress.textContent = hasGoal ? `現在 ${formatDuration(total)} 勉強しています ・ 達成率 ${percent}%` : (canSet ? "タップして今週の目標を設定しよう" : "次の月曜日に目標を設定できます");
+  }
 }
 function makeWheelOptions(container, max, selected) {
   container.replaceChildren();
@@ -344,6 +406,9 @@ let followUnsubscribe = null;
 let currentProfile = null;
 let scanStream = null;
 let scanFrame = null;
+const ADMIN_UID = "4FSh4Ems9lXyQVhoDVKRoO6PoKw1";
+let reportTargetUid = null;
+let reportFilter = "all";
 
 function relativeTime(value) {
   if (!value) return "日時不明";
@@ -369,19 +434,12 @@ async function canViewProfile(targetUid, targetProfile) {
 async function ensureUserProfile(user) {
   const ref = doc(db, "users", user.uid);
   const snap = await getDoc(ref);
-  let profile;
-  if (snap.exists()) {
-    profile = snap.data();
-    if (!profile.displayName) profile.displayName = user.displayName || "Study Mateユーザー";
-    if (typeof profile.bio !== "string") profile.bio = "";
-    if (typeof profile.isPrivate !== "boolean") profile.isPrivate = false;
-    await setDoc(ref, {displayName:profile.displayName, bio:profile.bio, photoURL:profile.photoURL || user.photoURL || "", isPrivate:profile.isPrivate, updatedAt:serverTimestamp()}, {merge:true});
-  } else {
-    const displayName = (user.displayName || prompt("Study Mateで表示する名前を入力してください") || "Study Mateユーザー").trim().slice(0,30);
-    profile = {displayName, bio:"", photoURL:user.photoURL || "", isPrivate:false, createdAt:serverTimestamp(), updatedAt:serverTimestamp()};
-    await setDoc(ref, profile);
-  }
-  await setDoc(doc(db,"profileDirectory",user.uid), {displayName:profile.displayName, photoURL:profile.photoURL || "", isPrivate:!!profile.isPrivate, updatedAt:serverTimestamp()}, {merge:true});
+  if (!snap.exists() || !snap.data().displayName) throw new Error("プロフィール設定が完了していません。");
+  const profile = snap.data();
+  if (typeof profile.bio !== "string") profile.bio = "";
+  if (typeof profile.isPrivate !== "boolean") profile.isPrivate = false;
+  await setDoc(ref, {bio:profile.bio, photoURL:profile.photoURL || user.photoURL || "", isPrivate:profile.isPrivate, updatedAt:serverTimestamp()}, {merge:true});
+  await setDoc(doc(db,"profileDirectory",user.uid), {displayName:profile.displayName, photoURL:profile.photoURL || user.photoURL || "", isPrivate:!!profile.isPrivate, updatedAt:serverTimestamp()}, {merge:true});
   return profile;
 }
 function showSocialPage(page) {
@@ -472,6 +530,11 @@ async function openUserProfile(uid){
     counts.textContent=`フォロワー ${followers.size}人　フォロー中 ${following.size}人`;info.append(name,counts);
     const isFollowing=await follows(me.uid,uid);if(uid!==me.uid)info.append(makeFollowButton(uid,isFollowing,profile.isPrivate));
     head.append(info);profileContent.append(head);
+    if (uid !== me.uid) {
+      const reportButton = document.createElement("button"); reportButton.type = "button"; reportButton.className = "report-user-button"; reportButton.textContent = "このユーザーを通報";
+      reportButton.addEventListener("click", () => openReportModal(uid, profile.displayName));
+      profileContent.append(reportButton);
+    }
     const tabs=document.createElement("div");tabs.className="profile-subtabs";const content=document.createElement("div");
     ["記録","タイムライン","プロフィール"].forEach(label=>{const b=document.createElement("button");b.textContent=label;b.onclick=()=>{tabs.querySelectorAll("button").forEach(x=>x.classList.toggle("active",x===b));showFriendSection(uid,profile,label,content,allowed);};tabs.append(b);});
     profileContent.append(tabs,content);
@@ -480,11 +543,176 @@ async function openUserProfile(uid){
   }catch(e){console.error(e);alert("プロフィールを開けませんでした。公開範囲またはFirestoreルールを確認してください。");}
 }
 async function showFriendSection(uid,profile,section,container,allowed){
-  container.replaceChildren();if(!allowed){container.textContent="相互フォローすると閲覧できます。";return;}
-  if(section==="プロフィール"){const p=document.createElement("p");p.textContent=profile.bio||"自己紹介はまだありません。";container.append(p);return;}
-  const snap=await getDocs(query(collection(db,"users",uid,"studyRecords"),orderBy("createdAt","desc"),limit(50)));
-  if(snap.empty){container.innerHTML='<p class="empty-state">まだ勉強記録がありません。</p>';return;}
-  snap.forEach(d=>{const data=d.data();const card=document.createElement("article");card.className="timeline-card";const strong=document.createElement("strong");strong.textContent=`${profile.displayName}：${data.subject}を${data.minutes}分勉強`;const p=document.createElement("p");p.textContent=data.comment||"勉強を頑張りました！";const small=document.createElement("small");small.textContent=relativeTime(data.createdAt);card.append(strong,p,small);container.append(card);});
+  container.replaceChildren();
+  if(!allowed){container.textContent="相互フォローすると閲覧できます。";return;}
+  if(section==="プロフィール"){
+    const p=document.createElement("p");
+    p.className="friend-bio";
+    p.textContent=profile.bio||"自己紹介はまだありません。";
+    container.append(p);
+    return;
+  }
+
+  try {
+    // 年間表示にも対応するため、最新50件ではなく対象ユーザーの記録を取得
+    const snap=await getDocs(query(
+      collection(db,"users",uid,"studyRecords"),
+      orderBy("createdAt","desc")
+    ));
+    const records=snap.docs.map(d=>({id:d.id,...d.data()}));
+
+    if(section==="記録"){
+      renderFriendStackedChart(container,records);
+      return;
+    }
+
+    // タイムラインは新しい記録から表示
+    if(!records.length){
+      container.innerHTML='<p class="empty-state">まだ勉強記録がありません。</p>';
+      return;
+    }
+    records.slice(0,50).forEach(data=>{
+      const card=document.createElement("article");card.className="timeline-card";
+      const strong=document.createElement("strong");
+      strong.textContent=`${profile.displayName}：${data.subject||"その他"}を${Number(data.minutes)||0}分勉強`;
+      const p=document.createElement("p");p.textContent=data.comment||"勉強を頑張りました！";
+      const small=document.createElement("small");small.textContent=relativeTime(data.createdAt);
+      card.append(strong,p,small);container.append(card);
+    });
+  } catch(error) {
+    console.error("友達の勉強記録読み込みエラー",error);
+    container.innerHTML='<p class="empty-state">勉強記録を読み込めませんでした。閲覧権限とFirestoreルールを確認してください。</p>';
+  }
+}
+
+function renderFriendStackedChart(container,records){
+  if(!records.length){
+    container.innerHTML='<p class="empty-state">まだ勉強記録がありません。</p>';
+    return;
+  }
+
+  let period="week",unit="hours",offset=0,selectedKey=null;
+  const root=document.createElement("section");root.className="friend-chart";
+  const controls=document.createElement("div");controls.className="friend-chart-controls";
+  const periodGroup=document.createElement("div");periodGroup.className="segmented-control";
+  const unitGroup=document.createElement("div");unitGroup.className="segmented-control unit-controls";
+  const nav=document.createElement("div");nav.className="chart-period-nav";
+  const prev=document.createElement("button");prev.type="button";prev.textContent="‹";prev.setAttribute("aria-label","前の期間");
+  const periodLabel=document.createElement("strong");
+  const next=document.createElement("button");next.type="button";next.textContent="›";next.setAttribute("aria-label","次の期間");
+  nav.append(prev,periodLabel,next);
+  const chart=document.createElement("div");chart.className="friend-stacked-chart";chart.setAttribute("aria-label","友達の教科別勉強時間グラフ");
+  const legend=document.createElement("div");legend.className="chart-legend";
+  const detail=document.createElement("div");detail.className="chart-detail";detail.setAttribute("aria-live","polite");
+  const summaryTitle=document.createElement("h3");summaryTitle.className="friend-chart-summary-title";summaryTitle.textContent="教科別の勉強時間";
+  const summary=document.createElement("div");summary.className="subject-summary";
+  ["week","month","year"].forEach((value,i)=>{
+    const b=document.createElement("button");b.type="button";b.dataset.value=value;b.textContent=["週","月","年"][i];
+    b.addEventListener("click",()=>{period=value;offset=0;selectedKey=null;render();});
+    periodGroup.append(b);
+  });
+  ["hours","minutes"].forEach((value,i)=>{
+    const b=document.createElement("button");b.type="button";b.dataset.value=value;b.textContent=["時間","分"][i];
+    b.addEventListener("click",()=>{unit=value;render();});
+    unitGroup.append(b);
+  });
+  controls.append(periodGroup,unitGroup);
+  root.append(controls,nav,chart,legend,detail,summaryTitle,summary);
+  container.append(root);
+
+  function rangeForPeriod(){
+    const now=tokyoDateKey();
+    if(period==="week"){
+      const start=addDays(mondayKeyFor(new Date()),offset*7);
+      return {start,end:addDays(start,7),label:offset===0?"今週":`${start}の週`};
+    }
+    if(period==="month"){
+      const [y,m]=now.split("-").map(Number);
+      const d=new Date(Date.UTC(y,m-1+offset,1));
+      const start=`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-01`;
+      const e=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,1));
+      const end=`${e.getUTCFullYear()}-${String(e.getUTCMonth()+1).padStart(2,"0")}-01`;
+      return {start,end,label:`${d.getUTCFullYear()}年${d.getUTCMonth()+1}月`};
+    }
+    const year=Number(now.slice(0,4))+offset;
+    return {start:`${year}-01-01`,end:`${year+1}-01-01`,label:`${year}年`};
+  }
+  function bucketsForRange(range){
+    const out=[];
+    if(period==="week"){
+      for(let i=0;i<7;i++){const key=addDays(range.start,i);out.push({key,label:["月","火","水","木","金","土","日"][i]});}
+    }else if(period==="month"){
+      const count=(dateFromKey(range.end)-dateFromKey(range.start))/86400000;
+      for(let i=0;i<count;i++){const key=addDays(range.start,i);out.push({key,label:String(i+1)});}
+    }else{
+      for(let i=0;i<12;i++){const key=`${range.start.slice(0,4)}-${String(i+1).padStart(2,"0")}-01`;out.push({key,label:`${i+1}月`,month:true});}
+    }
+    return out;
+  }
+  function valueText(minutes){return unit==="hours"?`${(minutes/60).toFixed(1)}時間`:`${minutes}分`;}
+  function render(){
+    const range=rangeForPeriod();periodLabel.textContent=range.label;
+    periodGroup.querySelectorAll("button").forEach(b=>b.classList.toggle("active",b.dataset.value===period));
+    unitGroup.querySelectorAll("button").forEach(b=>b.classList.toggle("active",b.dataset.value===unit));
+    next.disabled=offset>=0;
+    const inRange=records.filter(r=>{const key=dateKeyFromTimestamp(r.createdAt);return key&&key>=range.start&&key<range.end;});
+    const subjects=[...new Set(inRange.map(r=>r.subject||"その他"))];
+    const buckets=bucketsForRange(range).map(bucket=>{
+      const totals=new Map();
+      inRange.forEach(r=>{
+        const key=dateKeyFromTimestamp(r.createdAt);
+        const match=period==="year"?key?.startsWith(bucket.key.slice(0,7)):key===bucket.key;
+        if(match){const subject=r.subject||"その他";totals.set(subject,(totals.get(subject)||0)+Number(r.minutes||0));}
+      });
+      return {...bucket,totals,total:[...totals.values()].reduce((a,b)=>a+b,0)};
+    });
+    const max=Math.max(1,...buckets.map(b=>b.total));
+    chart.replaceChildren();
+    buckets.forEach(bucket=>{
+      const col=document.createElement("button");col.type="button";col.className="friend-chart-column";
+      if(selectedKey===bucket.key)col.classList.add("selected");
+      col.setAttribute("aria-label",`${bucket.key} ${valueText(bucket.total)}`);
+      const bar=document.createElement("span");bar.className="friend-chart-bar";
+      subjects.forEach(subject=>{
+        const value=bucket.totals.get(subject)||0;if(!value)return;
+        const segment=document.createElement("span");segment.className="friend-chart-segment";
+        segment.style.height=`${value/max*100}%`;segment.style.background=colorForSubject(subject);
+        segment.title=`${subject} ${valueText(value)}`;bar.append(segment);
+      });
+      const label=document.createElement("span");label.className="chart-label";label.textContent=bucket.label;
+      col.append(bar,label);
+      col.addEventListener("click",()=>{
+        selectedKey=bucket.key;render();
+        const details=[...bucket.totals.entries()].sort((a,b)=>b[1]-a[1]);
+        detail.textContent=details.length?`${bucket.key}：${details.map(([s,v])=>`${s} ${valueText(v)}`).join(" / ")}（合計 ${valueText(bucket.total)}）`:`${bucket.key}：勉強記録はありません。`;
+      });
+      chart.append(col);
+    });
+    legend.replaceChildren();
+    subjects.forEach(subject=>{
+      const item=document.createElement("span");item.className="legend-item";
+      const dot=document.createElement("i");dot.className="legend-dot";dot.style.background=colorForSubject(subject);
+      const name=document.createElement("span");name.textContent=subject;item.append(dot,name);legend.append(item);
+    });
+    detail.textContent="棒グラフをタップすると教科別の勉強時間を確認できます。";
+    const totals=new Map();inRange.forEach(r=>{const s=r.subject||"その他";totals.set(s,(totals.get(s)||0)+Number(r.minutes||0));});
+    const total=[...totals.values()].reduce((a,b)=>a+b,0);summary.replaceChildren();
+    [...totals.entries()].sort((a,b)=>b[1]-a[1]).forEach(([subject,value])=>{
+      const row=document.createElement("div");row.className="subject-summary-row";
+      const top=document.createElement("div");top.className="subject-summary-top";
+      const name=document.createElement("strong");name.textContent=subject;
+      const val=document.createElement("span");val.textContent=`${valueText(value)}（${total?Math.round(value/total*100):0}%）`;
+      top.append(name,val);
+      const track=document.createElement("div");track.className="subject-progress-track";
+      const fill=document.createElement("div");fill.className="subject-progress-fill";
+      fill.style.width=`${total?value/total*100:0}%`;fill.style.background=colorForSubject(subject);
+      track.append(fill);row.append(top,track);summary.append(row);
+    });
+    if(!totals.size)summary.innerHTML='<p class="empty-summary">この期間の勉強記録はまだありません。</p>';
+  }
+  prev.addEventListener("click",()=>{offset--;selectedKey=null;render();});
+  next.addEventListener("click",()=>{if(offset<0){offset++;selectedKey=null;render();}});
+  render();
 }
 $("backToFriendsButton").addEventListener("click",()=>{profilePanel.hidden=true;$("friendsPanel").hidden=false;$("socialTitle").textContent="フォロー";loadFollowingList();});
 async function loadFriendsTimeline(){
@@ -498,11 +726,56 @@ async function loadFriendsTimeline(){
   }catch(e){console.error(e);timelineListEl.textContent="タイムラインを読み込めませんでした。";}
 }
 
-// 自分のプロフィール編集
-async function loadMyProfileSettings(){const u=auth.currentUser;if(!u)return;const s=await getDoc(doc(db,"users",u.uid));if(!s.exists())return;const p=s.data();$("myDisplayName").value=p.displayName||"";$("myBio").value=p.bio||"";$("privateAccountToggle").checked=!!p.isPrivate;updatePrivacyLabel();}
-function updatePrivacyLabel(){$("accountPrivacyLabel").textContent=$("privateAccountToggle").checked?"非公開アカウント":"公開アカウント";}
+// 自分のホームプロフィール表示・編集
+function renderHomeStyleTags(styles = []) {
+  const container = $("homeStudyStyleTags");
+  if (!container) return;
+  container.replaceChildren();
+  if (!styles.length) { const empty=document.createElement("span"); empty.className="home-empty-tag"; empty.textContent="勉強スタイルを追加しよう"; container.append(empty); return; }
+  styles.forEach(tag => { const chip=document.createElement("span"); chip.className="home-style-tag"; chip.textContent="#" + tag; container.append(chip); });
+}
+function renderHomeAvatar(user, profile) {
+  const avatar=$("homeProfileAvatar"); avatar.replaceChildren();
+  const photo=profile.photoURL || user.photoURL;
+  if(photo){const img=document.createElement("img");img.src=photo;img.alt="プロフィール画像";img.referrerPolicy="no-referrer";avatar.append(img);}
+  else avatar.textContent=(profile.displayName || "S").slice(0,1);
+}
+async function loadMyProfileSettings(){
+  const u=auth.currentUser;if(!u)return;
+  const s=await getDoc(doc(db,"users",u.uid));if(!s.exists())return;
+  const p=s.data();
+  $("myDisplayName").value=p.displayName||"";$("myBio").value=p.bio||"";$("privateAccountToggle").checked=!!p.isPrivate;
+  $("myStudyStyles").value=(Array.isArray(p.studyStyles)?p.studyStyles:[]).join("#");
+  $("homeProfileName").textContent=p.displayName||"名前未設定";
+  $("homeBioText").textContent=p.bio||"自己紹介はまだありません。";
+  renderHomeAvatar(u,p);renderHomeStyleTags(Array.isArray(p.studyStyles)?p.studyStyles:[]);
+  updatePrivacyLabel();
+  const [followers,following]=await Promise.all([getDocs(query(collection(db,"follows"),where("targetUid","==",u.uid))),getDocs(query(collection(db,"follows"),where("followerUid","==",u.uid)))]);
+  $("homeFollowerCount").textContent=followers.size;$("homeFollowingCount").textContent=following.size;
+}
+function updatePrivacyLabel(){const label=$("privateAccountToggle").checked?"非公開アカウント":"公開アカウント";$("accountPrivacyLabel").textContent=label;$("profileEditPrivacyLabel").textContent=label;}
 $("privateAccountToggle").addEventListener("change",updatePrivacyLabel);
-$("saveProfileButton").addEventListener("click",async()=>{const u=auth.currentUser;if(!u)return;const displayName=$("myDisplayName").value.trim();if(!displayName)return alert("表示名を入力してください。");const bio=$("myBio").value.trim();const isPrivate=$("privateAccountToggle").checked;try{await updateDoc(doc(db,"users",u.uid),{displayName:displayName.slice(0,30),bio:bio.slice(0,120),isPrivate,updatedAt:serverTimestamp()});await setDoc(doc(db,"profileDirectory",u.uid),{displayName:displayName.slice(0,30),photoURL:u.photoURL||"",isPrivate,updatedAt:serverTimestamp()},{merge:true});$("profileSaveMessage").textContent="プロフィールを保存しました。";}catch(e){console.error(e);alert("保存できませんでした。Firestoreルールを確認してください。");}});
+$("editHomeProfileButton").addEventListener("click",()=>{$("profileEditPanel").hidden=false;$("profileEditPanel").scrollIntoView({behavior:"smooth",block:"center"});});
+$("cancelProfileEditButton").addEventListener("click",()=>{$("profileEditPanel").hidden=true;loadMyProfileSettings();});
+$("saveProfileButton").addEventListener("click",async()=>{
+  const u=auth.currentUser;if(!u)return;const displayName=$("myDisplayName").value.trim();if(!displayName)return alert("表示名を入力してください。");
+  const isPrivate=$("privateAccountToggle").checked;
+  try{
+    await updateDoc(doc(db,"users",u.uid),{displayName:displayName.slice(0,30),isPrivate,updatedAt:serverTimestamp()});
+    await setDoc(doc(db,"profileDirectory",u.uid),{displayName:displayName.slice(0,30),photoURL:u.photoURL||"",isPrivate,updatedAt:serverTimestamp()},{merge:true});
+    $("profileSaveMessage").textContent="プロフィールを保存しました。";$("profileEditPanel").hidden=true;await loadMyProfileSettings();
+  }catch(e){console.error(e);alert("保存できませんでした。Firestoreルールを確認してください。");}
+});
+$("editBioButton").addEventListener("click",()=>{$("bioEditor").hidden=!$("bioEditor").hidden;$("myBio").value=$("homeBioText").textContent==="自己紹介はまだありません。"?"":$("homeBioText").textContent;});
+$("saveBioButton").addEventListener("click",async()=>{const u=auth.currentUser;if(!u)return;const bio=$("myBio").value.trim().slice(0,120);try{await updateDoc(doc(db,"users",u.uid),{bio,updatedAt:serverTimestamp()});$("homeBioText").textContent=bio||"自己紹介はまだありません。";$("bioEditor").hidden=true;}catch(e){console.error(e);alert("自己紹介を保存できませんでした。");}});
+$("editStudyStyleButton").addEventListener("click",()=>{$("studyStyleEditor").hidden=!$("studyStyleEditor").hidden;});
+$("saveStudyStyleButton").addEventListener("click",async()=>{
+  const u=auth.currentUser;if(!u)return;
+  const raw=$("myStudyStyles").value;
+  const styles=[...new Set(raw.split("#").map(x=>x.trim().replace(/^#+/,"")).filter(Boolean))].slice(0,12).map(x=>x.slice(0,24));
+  try{await updateDoc(doc(db,"users",u.uid),{studyStyles:styles,updatedAt:serverTimestamp()});renderHomeStyleTags(styles);$("myStudyStyles").value=styles.join("#");$("studyStyleEditor").hidden=true;}catch(e){console.error(e);alert("勉強スタイルを保存できませんでした。Firestoreルールを確認してください。");}
+});
+$("homeGoalSummary").addEventListener("click",()=>showSocialPage("records"));
 
 // QRコード：URLにはプロフィールを開くためのUIDだけを含め、認証情報は含めない
 function profileUrl(uid){return `${location.origin}${location.pathname}?profile=${encodeURIComponent(uid)}`;}
@@ -519,17 +792,111 @@ $("startQrScanButton").addEventListener("click",async()=>{
 // QRのリンクからプロフィールを直接開く
 async function openProfileFromUrl(){const uid=new URLSearchParams(location.search).get("profile");if(uid){showSocialPage("friends");await openUserProfile(uid);}}
 
+// 通報機能：プロフィールから送信し、管理者だけが一覧を閲覧できる
+function openReportModal(uid, displayName) {
+  if (!uid || uid === auth.currentUser?.uid) return;
+  reportTargetUid = uid;
+  $("reportTargetName").textContent = `通報対象：${displayName || "ユーザー"}`;
+  $("reportReason").value = "迷惑行為";
+  $("reportDetails").value = "";
+  $("reportModal").hidden = false;
+}
+$("closeReportModal").addEventListener("click", () => { $("reportModal").hidden = true; reportTargetUid = null; });
+$("submitReportButton").addEventListener("click", async () => {
+  const me = auth.currentUser;
+  if (!me || !reportTargetUid) return;
+  const reason = $("reportReason").value;
+  const details = $("reportDetails").value.trim().slice(0, 500);
+  const button = $("submitReportButton");
+  button.disabled = true;
+  try {
+    const reportRef = doc(collection(db, "reports"));
+    await setDoc(reportRef, {
+      reporterUid: me.uid,
+      targetUid: reportTargetUid,
+      reason,
+      details,
+      status: "unresolved",
+      createdAt: serverTimestamp()
+    });
+    $("reportModal").hidden = true;
+    reportTargetUid = null;
+    alert("通報を送信しました。ご協力ありがとうございます。");
+  } catch (error) {
+    console.error("通報送信エラー", error);
+    alert("通報を送信できませんでした。時間をおいて再度お試しください。");
+  } finally { button.disabled = false; }
+});
+
+function formatReportDate(value) {
+  const date = timestampDate(value);
+  if (!date || Number.isNaN(date.getTime())) return "日時不明";
+  return new Intl.DateTimeFormat("ja-JP", {timeZone:"Asia/Tokyo", year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit"}).format(date);
+}
+async function loadAdminReports() {
+  if (auth.currentUser?.uid !== ADMIN_UID) return;
+  const list = $("adminReportsList");
+  list.textContent = "読み込み中...";
+  try {
+    const snap = await getDocs(query(collection(db, "reports"), orderBy("createdAt", "desc"), limit(100)));
+    list.replaceChildren();
+    const reports = snap.docs.map(d => ({id:d.id, ...d.data()})).filter(r => reportFilter === "all" || (reportFilter === "resolved" ? r.status === "resolved" : r.status !== "resolved"));
+    if (!reports.length) { list.innerHTML = '<p class="empty-state">該当する通報はありません。</p>'; return; }
+    for (const report of reports) {
+      const card = document.createElement("article"); card.className = "admin-report-card";
+      const heading = document.createElement("div"); heading.className = "admin-report-heading";
+      const title = document.createElement("strong"); title.textContent = report.reason || "理由未設定";
+      const status = document.createElement("span"); status.className = report.status === "resolved" ? "report-status resolved" : "report-status"; status.textContent = report.status === "resolved" ? "対応済み" : "未対応";
+      heading.append(title, status);
+      const target = document.createElement("p"); target.textContent = `通報対象 UID：${report.targetUid || "不明"}`;
+      const reporter = document.createElement("p"); reporter.textContent = `通報者 UID：${report.reporterUid || "不明"}`;
+      const date = document.createElement("small"); date.textContent = `通報日時：${formatReportDate(report.createdAt)}`;
+      const details = document.createElement("p"); details.className = "admin-report-details"; details.textContent = report.details || "詳細説明はありません。";
+      const action = document.createElement("button"); action.type = "button"; action.className = report.status === "resolved" ? "secondary-button" : "primary-button"; action.textContent = report.status === "resolved" ? "未対応に戻す" : "対応済みにする";
+      action.addEventListener("click", async () => {
+        action.disabled = true;
+        try { await updateDoc(doc(db, "reports", report.id), {status:report.status === "resolved" ? "unresolved" : "resolved", reviewedAt:serverTimestamp()}); await loadAdminReports(); }
+        catch (error) { console.error(error); alert("対応状況を更新できませんでした。"); action.disabled = false; }
+      });
+      card.append(heading, target, reporter, date, details, action); list.append(card);
+    }
+  } catch (error) {
+    console.error("通報一覧読み込みエラー", error);
+    list.textContent = "通報一覧を読み込めませんでした。Firestoreルールが更新されているか確認してください。";
+  }
+}
+$("adminReportsButton").addEventListener("click", async () => {
+  if (auth.currentUser?.uid !== ADMIN_UID) return;
+  $("homePanel").hidden = true; socialArea.hidden = true; $("adminReportsPanel").hidden = false; bottomNavigation.hidden = true;
+  await loadAdminReports();
+});
+$("closeAdminReportsButton").addEventListener("click", () => { $("adminReportsPanel").hidden = true; showSocialPage("home"); });
+document.querySelectorAll("[data-report-filter]").forEach(button => button.addEventListener("click", async () => {
+  reportFilter = button.dataset.reportFilter;
+  document.querySelectorAll("[data-report-filter]").forEach(b => b.classList.toggle("active", b === button));
+  await loadAdminReports();
+}));
+
 // 認証状態（画面・友達機能の定義後に開始）
 onAuthStateChanged(auth, async user => {
   if (!user) {
+    $("adminReportsButton").hidden = true;
+    $("adminReportsPanel").hidden = true;
     showLoginScreen();
     studyRecords = [];
     currentGoal = null;
     return;
   }
-  showAppScreen();
-  showSocialPage("home");
   try {
+    const profileSnap = await getDoc(doc(db, "users", user.uid));
+    if (!profileSnap.exists() || !profileSnap.data().displayName) {
+      showProfileSetupScreen(user);
+      return;
+    }
+    showAppScreen();
+    $("adminReportsButton").hidden = user.uid !== ADMIN_UID;
+    $("adminReportsPanel").hidden = true;
+    showSocialPage("home");
     await ensureUserProfile(user);
     await Promise.all([loadStudyRecords(), loadWeeklyGoal(), loadMyProfileSettings()]);
     if (new URLSearchParams(location.search).has("profile")) await openProfileFromUrl();

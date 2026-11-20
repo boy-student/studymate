@@ -2,6 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && request.auth.uid == "4FSh4Ems9lXyQVhoDVKRoO6PoKw1"; }
     function follows(fromUid, toUid) {
       return signedIn() && exists(/databases/$(database)/documents/follows/$(fromUid + "_" + toUid));
     }
@@ -23,10 +24,10 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if canView(uid);
       allow create: if signedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(["displayName", "photoURL", "bio", "isPrivate", "createdAt", "updatedAt", "username"])
+        && request.resource.data.keys().hasOnly(["displayName", "photoURL", "bio", "studyStyles", "isPrivate", "createdAt", "updatedAt", "username"])
         && request.resource.data.displayName is string;
       allow update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(["displayName", "photoURL", "bio", "isPrivate", "createdAt", "updatedAt", "username"])
+        && request.resource.data.keys().hasOnly(["displayName", "photoURL", "bio", "studyStyles", "isPrivate", "createdAt", "updatedAt", "username"])
         && request.resource.data.displayName is string
         && request.resource.data.isPrivate is bool;
       allow delete: if signedIn() && request.auth.uid == uid;
@@ -60,6 +61,24 @@ service cloud.firestore {
         && followId == request.auth.uid + "_" + request.resource.data.targetUid;
       allow delete: if signedIn() && resource.data.followerUid == request.auth.uid;
       allow update: if false;
+    }
+    // 通報：送信者本人は作成のみ。閲覧・対応状況の更新は管理者のみ。
+    match /reports/{reportId} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(["reporterUid", "targetUid", "reason", "details", "status", "createdAt"])
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.targetUid is string
+        && request.resource.data.targetUid != request.auth.uid
+        && request.resource.data.reason in ["迷惑行為", "嫌がらせ・いじめ", "不適切なプロフィール", "スパム", "その他"]
+        && request.resource.data.details is string
+        && request.resource.data.details.size() <= 500
+        && request.resource.data.status == "unresolved"
+        && request.resource.data.createdAt == request.time;
+      allow read: if isAdmin();
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "reviewedAt"])
+        && request.resource.data.status in ["unresolved", "resolved"];
+      allow delete: if isAdmin();
     }
     // Legacy friendship collection is intentionally disabled; the app now uses one-way follows.
     match /friendships/{id} { allow read, write: if false; }

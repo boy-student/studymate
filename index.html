@@ -63,8 +63,16 @@
           id="password"
           placeholder="パスワード（6文字以上）"
           minlength="6"
-          autocomplete="current-password"
+          autocomplete="new-password"
           required
+        >
+
+        <input
+          type="password"
+          id="passwordConfirm"
+          placeholder="パスワード（確認）※新規登録時"
+          minlength="6"
+          autocomplete="new-password"
         >
 
         <button type="button" id="loginButton" class="login-button">
@@ -92,6 +100,30 @@
 
 
   <!-- =========================
+       初回プロフィール設定
+  ========================== -->
+  <section id="profileSetupScreen" class="profile-setup-screen" hidden>
+    <div class="profile-setup-card">
+      <div class="setup-step">STEP 2 / 2</div>
+      <h1>プロフィールを作成</h1>
+      <p class="section-description">Study Mateで使う名前やプロフィールを設定しよう。</p>
+      <div class="setup-avatar" id="setupAvatar">S</div>
+      <p class="setup-avatar-note">Googleアカウントの画像がある場合は自動で表示されます。</p>
+      <form id="profileSetupForm" class="profile-setup-form">
+        <label for="setupDisplayName">ユーザーネーム（表示名）<span>必須</span></label>
+        <input id="setupDisplayName" type="text" maxlength="30" placeholder="例：はる" autocomplete="nickname" required>
+        <label for="setupBio">自己紹介 <small>任意</small></label>
+        <textarea id="setupBio" maxlength="120" rows="3" placeholder="好きな教科や目標など"></textarea>
+        <label class="setup-privacy-label"><input id="setupPrivate" type="checkbox"> 非公開アカウントにする</label>
+        <p class="section-description">公開設定はあとからホーム画面で変更できます。</p>
+        <button type="submit" class="primary-button" id="finishProfileSetupButton">Study Mateを始める</button>
+        <button type="button" class="secondary-button" id="setupLogoutButton">ログアウト</button>
+        <p id="profileSetupMessage" class="section-description" aria-live="polite"></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- =========================
        ログイン後の勉強管理画面
   ========================== -->
   <div id="appContent" hidden>
@@ -100,26 +132,46 @@
       <h1>Study Mate</h1>
       <p>毎日の勉強を、もっと楽しく。</p>
 
-      <button type="button" id="appLogoutButton">
-        ログアウト
-      </button>
+      <div class="header-actions">
+        <button type="button" id="adminReportsButton" hidden>通報管理</button>
+        <button type="button" id="appLogoutButton">ログアウト</button>
+      </div>
     </header>
 
     <main class="container" id="homePanel">
-      <section class="welcome">
-        <h2>今日も勉強を頑張ろう！</h2>
-        <p>勉強した時間を記録して、少しずつ積み重ねよう。</p>
+      <section class="home-profile-card">
+        <div class="home-profile-top">
+          <div id="homeProfileAvatar" class="home-profile-avatar">S</div>
+          <div class="home-profile-identity"><h2 id="homeProfileName">ユーザー名</h2><div class="home-profile-counts"><span><strong id="homeFollowingCount">0</strong> フォロー</span><span><strong id="homeFollowerCount">0</strong> フォロワー</span></div></div>
+          <button type="button" id="editHomeProfileButton" class="home-profile-edit"><span aria-hidden="true">✎</span> 編集</button>
+        </div>
+        <span id="accountPrivacyLabel" class="home-privacy-label">公開アカウント</span>
       </section>
 
-      <section class="home-study-card account-settings-card">
-        <div class="account-settings-heading"><h2>プロフィール設定</h2><span id="accountPrivacyLabel">公開アカウント</span></div>
-        <label for="myDisplayName">表示名</label>
-        <input id="myDisplayName" type="text" maxlength="30" placeholder="表示名">
-        <label for="myBio">自己紹介</label>
-        <textarea id="myBio" maxlength="120" rows="3" placeholder="自分のプロフィールを紹介しよう"></textarea>
+      <button type="button" id="homeGoalSummary" class="home-study-goal-card">
+        <div class="home-section-heading"><h2>勉強目標</h2><span>記録で確認 ›</span></div>
+        <strong id="homeGoalValue">今週の目標：未設定</strong>
+        <p id="homeGoalProgress">タップして今週の勉強目標を確認</p>
+      </button>
+
+      <section class="home-info-card">
+        <div class="home-section-heading"><h2>自己紹介</h2><button type="button" id="editBioButton">編集</button></div>
+        <p id="homeBioText" class="home-bio-text">自己紹介はまだありません。</p>
+        <div id="bioEditor" class="home-inline-editor" hidden><textarea id="myBio" maxlength="120" rows="3" placeholder="自分のことを紹介しよう"></textarea><button type="button" id="saveBioButton" class="primary-button">保存</button></div>
+      </section>
+
+      <section class="home-info-card">
+        <div class="home-section-heading"><h2>勉強スタイル</h2><button type="button" id="editStudyStyleButton">編集</button></div>
+        <div id="homeStudyStyleTags" class="home-style-tags"><span class="home-empty-tag">勉強スタイルを追加しよう</span></div>
+        <div id="studyStyleEditor" class="home-inline-editor" hidden><label for="myStudyStyles">「#」で区切って入力</label><textarea id="myStudyStyles" maxlength="300" rows="2" placeholder="朝型#集中型#毎日コツコツ"></textarea><p class="section-description">例：朝型#集中型 と入力すると、#朝型 #集中型 と表示されるよ。</p><button type="button" id="saveStudyStyleButton" class="primary-button">保存</button></div>
+      </section>
+
+      <section id="profileEditPanel" class="home-study-card account-settings-card" hidden>
+        <div class="account-settings-heading"><h2>プロフィールを編集</h2><span id="profileEditPrivacyLabel">公開アカウント</span></div>
+        <label for="myDisplayName">表示名</label><input id="myDisplayName" type="text" maxlength="30" placeholder="表示名">
         <label class="privacy-toggle"><input id="privateAccountToggle" type="checkbox"> 非公開アカウントにする</label>
-        <p class="section-description">公開：誰でもプロフィールと勉強記録を閲覧できます。非公開：相互フォローした相手だけがプロフィールと勉強記録を閲覧できます。</p>
-        <div class="profile-setting-actions"><button type="button" id="saveProfileButton" class="primary-button">プロフィールを保存</button><button type="button" id="showMyQrButton" class="secondary-button">自分のQRコード</button></div>
+        <p class="section-description">公開：誰でもプロフィールと勉強記録を閲覧できます。非公開：相互フォローした相手だけが閲覧できます。</p>
+        <div class="profile-setting-actions"><button type="button" id="saveProfileButton" class="primary-button">保存</button><button type="button" id="cancelProfileEditButton" class="secondary-button">キャンセル</button><button type="button" id="showMyQrButton" class="secondary-button">自分のQRコード</button></div>
         <p id="profileSaveMessage" class="section-description" aria-live="polite"></p>
       </section>
 
@@ -204,6 +256,40 @@
           <section class="record-section subject-summary-section"><h3>教科別の勉強時間</h3><p class="section-description" id="subjectSummaryPeriod">今週の教科別合計</p><div id="subjectSummary" class="subject-summary"></div></section>
         </section>
       </section>
+
+
+      <section id="adminReportsPanel" class="social-panel admin-reports-panel" hidden>
+        <div class="admin-panel-heading">
+          <div><h2>通報管理</h2><p class="section-description">管理者専用・通報内容の確認と対応状況の管理</p></div>
+          <button type="button" id="closeAdminReportsButton" class="secondary-button">閉じる</button>
+        </div>
+        <div class="admin-report-filters">
+          <button type="button" class="active" data-report-filter="all">すべて</button>
+          <button type="button" data-report-filter="unresolved">未対応</button>
+          <button type="button" data-report-filter="resolved">対応済み</button>
+        </div>
+        <div id="adminReportsList" class="admin-reports-list"><p class="empty-state">通報を読み込んでいます...</p></div>
+      </section>
+
+      <div id="reportModal" class="study-modal" hidden>
+        <div class="study-modal-card">
+          <button type="button" class="modal-close" id="closeReportModal">×</button>
+          <h2>ユーザーを通報</h2>
+          <p id="reportTargetName" class="section-description"></p>
+          <label for="reportReason">通報理由</label>
+          <select id="reportReason" class="report-select">
+            <option value="迷惑行為">迷惑行為</option>
+            <option value="嫌がらせ・いじめ">嫌がらせ・いじめ</option>
+            <option value="不適切なプロフィール">不適切なプロフィール</option>
+            <option value="スパム">スパム</option>
+            <option value="その他">その他</option>
+          </select>
+          <label for="reportDetails">詳しい内容（任意）</label>
+          <textarea id="reportDetails" maxlength="500" rows="4" placeholder="問題の内容を入力してください"></textarea>
+          <button type="button" id="submitReportButton" class="primary-button">通報を送信</button>
+          <p class="section-description">通報内容は管理者のみが確認できます。虚偽の通報は控えてください。</p>
+        </div>
+      </div>
 
       <div id="searchModal" class="study-modal" hidden>
         <div class="study-modal-card"><button type="button" class="modal-close" id="closeSearchModal">×</button><h2>ユーザーを検索</h2><p class="section-description">表示名の一部を入力して検索できます。</p><input id="userSearchInput" type="search" maxlength="30" placeholder="名前を入力"><button type="button" id="runUserSearch" class="primary-button">検索</button><div id="userSearchResults" class="friend-list"></div></div>
